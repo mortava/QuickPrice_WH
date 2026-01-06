@@ -5,6 +5,9 @@
 
 import { BASE_RATES, PROGRAMS, LLPA_NONQM_C, LLPA_DSCR_C } from '../data/rateSheets';
 
+// Hidden margin deduction applied to all programs (not shown to client)
+const MARGIN_DEDUCTION = -1.625;
+
 export class PricingEngine {
 
   /**
@@ -43,7 +46,7 @@ export class PricingEngine {
         if (ltv > min && ltv <= max) return bucket;
       }
     }
-    return null; // Out of bounds
+    return null;
   }
 
   /**
@@ -54,7 +57,7 @@ export class PricingEngine {
       return 0;
     }
     const value = table[key][ltvBucket];
-    return value === null ? null : value; // null means ineligible
+    return value === null ? null : value;
   }
 
   /**
@@ -62,7 +65,6 @@ export class PricingEngine {
    */
   static mapCreditScore(score, isDSCR = false) {
     if (typeof score === 'string') {
-      // Already a bucket string
       if (score.includes('780') || score === '≥780') return isDSCR ? '≥760' : '≥780';
       if (score.includes('760-779')) return isDSCR ? '≥760' : '760-779';
       if (score.includes('740-759')) return '740-759';
@@ -73,7 +75,6 @@ export class PricingEngine {
       if (score.includes('640-659')) return '640-659';
       return '≥780';
     }
-    // Numeric score
     if (score >= 780) return isDSCR ? '≥760' : '≥780';
     if (score >= 760) return isDSCR ? '≥760' : '760-779';
     if (score >= 740) return '740-759';
@@ -134,7 +135,6 @@ export class PricingEngine {
     if (purpose === 'Purchase') return 'Purchase';
     if (purpose === 'Rate/Term') return 'Rate/Term';
     if (isDSCR) return 'Cash-Out';
-    // NonQM splits cash-out by credit score
     const scoreNum = typeof creditScore === 'string'
       ? parseInt(creditScore.match(/\d+/)?.[0] || '720')
       : creditScore;
@@ -183,48 +183,41 @@ export class PricingEngine {
     const adjustments = [];
     let total = 0;
 
-    // Credit Score
     const scoreKey = this.mapCreditScore(input.creditScore, false);
     const scoreAdj = this.getAdjustment(llpa.score, scoreKey, ltvBucket);
     if (scoreAdj === null) return { total: null, adjustments, ineligible: 'Credit Score' };
     adjustments.push({ name: 'Credit Score', key: scoreKey, value: scoreAdj });
     total += scoreAdj;
 
-    // Loan Amount
     const loanKey = this.mapLoanAmount(input.loanAmount, false);
     const loanAdj = this.getAdjustment(llpa.loanAmount, loanKey, ltvBucket);
     if (loanAdj === null) return { total: null, adjustments, ineligible: 'Loan Amount' };
     adjustments.push({ name: 'Loan Amount', key: loanKey, value: loanAdj });
     total += loanAdj;
 
-    // Purpose
     const purposeKey = this.mapPurpose(input.loanPurpose, input.creditScore, false);
     const purposeAdj = this.getAdjustment(llpa.purpose, purposeKey, ltvBucket);
     if (purposeAdj === null) return { total: null, adjustments, ineligible: 'Loan Purpose' };
     adjustments.push({ name: 'Purpose', key: purposeKey, value: purposeAdj });
     total += purposeAdj;
 
-    // Product
     const productKey = this.mapProduct(input.loanProduct);
     const productAdj = this.getAdjustment(llpa.product, productKey, ltvBucket);
     if (productAdj === null) return { total: null, adjustments, ineligible: 'Loan Product' };
     adjustments.push({ name: 'Product', key: productKey, value: productAdj });
     total += productAdj;
 
-    // Occupancy
     const occAdj = this.getAdjustment(llpa.occupancy, input.occupancy, ltvBucket);
     if (occAdj === null) return { total: null, adjustments, ineligible: 'Occupancy' };
     adjustments.push({ name: 'Occupancy', key: input.occupancy, value: occAdj });
     total += occAdj;
 
-    // Property Type
     const propKey = this.mapPropertyType(input.propertyType, false);
     const propAdj = this.getAdjustment(llpa.propertyType, propKey, ltvBucket);
     if (propAdj === null) return { total: null, adjustments, ineligible: 'Property Type' };
     adjustments.push({ name: 'Property Type', key: propKey, value: propAdj });
     total += propAdj;
 
-    // Citizenship
     const citKey = input.citizenship === 'US Citizen' ? 'US Citizen'
       : input.citizenship === 'Perm-Resident' ? 'Perm-Resident'
       : 'Non-Perm Resident';
@@ -234,7 +227,6 @@ export class PricingEngine {
       total += citAdj;
     }
 
-    // Income Doc Type
     const docKey = input.docType.includes('Full Doc') ? '1yr Full Doc'
       : input.docType.includes('1099') ? '1yr 1099 Only'
       : input.docType.includes('Bank') ? '12m Bank Stmts'
@@ -246,7 +238,6 @@ export class PricingEngine {
       total += docAdj;
     }
 
-    // DTI
     const dtiKey = input.dti.includes('≤43') ? '≤43%' : '43.01-50%';
     const dtiAdj = this.getAdjustment(llpa.dti, dtiKey, ltvBucket);
     if (dtiAdj !== null) {
@@ -254,7 +245,6 @@ export class PricingEngine {
       total += dtiAdj;
     }
 
-    // Prepay Period
     const prepayKey = this.mapPrepayPeriod(input.prepayPeriod);
     const prepayAdj = this.getAdjustment(llpa.prepayPeriod, prepayKey, ltvBucket);
     if (prepayAdj !== null) {
@@ -262,7 +252,6 @@ export class PricingEngine {
       total += prepayAdj;
     }
 
-    // Prepay Fee
     const feeKey = this.mapPrepayFee(input.prepayFee);
     const feeAdj = this.getAdjustment(llpa.prepayFee, feeKey, ltvBucket);
     if (feeAdj !== null) {
@@ -270,7 +259,6 @@ export class PricingEngine {
       total += feeAdj;
     }
 
-    // Escrow Waiver
     const escrowKey = input.escrowWaiver ? 'Yes' : 'No';
     const escrowAdj = this.getAdjustment(llpa.escrowWaiver, escrowKey, ltvBucket);
     if (escrowAdj !== null) {
@@ -278,14 +266,12 @@ export class PricingEngine {
       total += escrowAdj;
     }
 
-    // Lock Term
     const lockAdj = this.getAdjustment(llpa.lockTerm, input.lockTerm, ltvBucket);
     if (lockAdj !== null) {
       adjustments.push({ name: 'Lock Term', key: input.lockTerm, value: lockAdj });
       total += lockAdj;
     }
 
-    // State adjustment
     const stateAdj = this.getAdjustment(llpa.stateAdj, input.state, ltvBucket);
     if (stateAdj) {
       adjustments.push({ name: 'State', key: input.state, value: stateAdj });
@@ -303,7 +289,6 @@ export class PricingEngine {
     const adjustments = [];
     let total = 0;
 
-    // Credit Score (DSCR uses different buckets)
     const scoreKey = this.mapCreditScore(input.creditScore, true);
     const scoreAdj = this.getAdjustment(llpa.score, scoreKey, ltvBucket);
     if (scoreAdj === null) return { total: null, adjustments, ineligible: 'Credit Score' };
@@ -312,7 +297,6 @@ export class PricingEngine {
       total += scoreAdj;
     }
 
-    // DSCR Ratio
     const dscrKey = this.mapDscrRatio(input.dscrRatio);
     const dscrAdj = this.getAdjustment(llpa.dscrRatio, dscrKey, ltvBucket);
     if (dscrAdj !== null && dscrAdj !== undefined) {
@@ -320,21 +304,18 @@ export class PricingEngine {
       total += dscrAdj;
     }
 
-    // STR
     const strKey = input.dscrShortTermRental ? 'Yes' : 'No';
     const strAdj = this.getAdjustment(llpa.str, strKey, ltvBucket);
     if (strAdj === null) return { total: null, adjustments, ineligible: 'Short Term Rental' };
     adjustments.push({ name: 'Short Term Rental', key: strKey, value: strAdj });
     total += strAdj;
 
-    // Product
     const productKey = this.mapProduct(input.loanProduct);
     const productAdj = this.getAdjustment(llpa.product, productKey, ltvBucket);
     if (productAdj === null) return { total: null, adjustments, ineligible: 'Loan Product' };
     adjustments.push({ name: 'Product', key: productKey, value: productAdj });
     total += productAdj;
 
-    // Loan Amount
     const loanKey = this.mapLoanAmount(input.loanAmount, true);
     const loanAdj = this.getAdjustment(llpa.loanAmount, loanKey, ltvBucket);
     if (loanAdj !== null && loanAdj !== undefined) {
@@ -342,13 +323,11 @@ export class PricingEngine {
       total += loanAdj;
     }
 
-    // Purpose
     const purposeAdj = this.getAdjustment(llpa.purpose, input.loanPurpose, ltvBucket);
     if (purposeAdj === null) return { total: null, adjustments, ineligible: 'Loan Purpose' };
     adjustments.push({ name: 'Purpose', key: input.loanPurpose, value: purposeAdj });
     total += purposeAdj;
 
-    // Property Type
     const propKey = this.mapPropertyType(input.propertyType, true);
     const propAdj = this.getAdjustment(llpa.propertyType, propKey, ltvBucket);
     if (propAdj !== null && propAdj !== undefined) {
@@ -356,7 +335,6 @@ export class PricingEngine {
       total += propAdj;
     }
 
-    // Prepay Period
     const prepayKey = this.mapPrepayPeriod(input.prepayPeriod);
     const prepayAdj = this.getAdjustment(llpa.prepayPeriod, prepayKey, ltvBucket);
     if (prepayAdj !== null) {
@@ -364,7 +342,6 @@ export class PricingEngine {
       total += prepayAdj;
     }
 
-    // Prepay Fee
     const feeKey = this.mapPrepayFee(input.prepayFee);
     const feeAdj = this.getAdjustment(llpa.prepayFee, feeKey, ltvBucket);
     if (feeAdj !== null) {
@@ -372,7 +349,6 @@ export class PricingEngine {
       total += feeAdj;
     }
 
-    // Escrow Waiver
     const escrowKey = input.escrowWaiver ? 'Yes' : 'No';
     const escrowAdj = this.getAdjustment(llpa.escrowWaiver, escrowKey, ltvBucket);
     if (escrowAdj !== null) {
@@ -380,14 +356,12 @@ export class PricingEngine {
       total += escrowAdj;
     }
 
-    // Lock Term
     const lockAdj = this.getAdjustment(llpa.lockTerm, input.lockTerm, ltvBucket);
     if (lockAdj !== null) {
       adjustments.push({ name: 'Lock Term', key: input.lockTerm, value: lockAdj });
       total += lockAdj;
     }
 
-    // State adjustment
     const stateAdj = this.getAdjustment(llpa.stateAdj, input.state, ltvBucket);
     if (stateAdj) {
       adjustments.push({ name: 'State', key: input.state, value: stateAdj });
@@ -400,12 +374,10 @@ export class PricingEngine {
   /**
    * Main pricing calculation
    * Returns array of rate/price combinations with adjustments applied
+   * Includes hidden margin deduction and filters to 99-101 price range
    */
   static calculateRates(input) {
-    // Calculate LTV
     const ltv = (input.loanAmount / input.purchasePrice) * 100;
-
-    // Select program
     const programKey = this.selectProgram(input);
     const program = PROGRAMS[programKey];
 
@@ -413,13 +385,11 @@ export class PricingEngine {
       return { error: 'No matching program found', rates: [] };
     }
 
-    // Get LTV bucket
     const ltvBucket = this.getLtvBucket(ltv, programKey);
     if (!ltvBucket) {
       return { error: `LTV ${ltv.toFixed(2)}% exceeds program maximum`, rates: [] };
     }
 
-    // Calculate LLPA
     const isDSCR = programKey.includes('DSCR');
     const llpaResult = isDSCR
       ? this.calculateDscrLlpa(input, ltvBucket)
@@ -433,26 +403,52 @@ export class PricingEngine {
       };
     }
 
-    // Apply LLPA to base rates
+    // Apply LLPA + hidden margin deduction to base rates
     const baseRates = program.baseRates;
-    const adjustedRates = baseRates.map(({ rate, price }) => ({
-      rate: rate,
-      basePrice: price,
-      llpaTotal: llpaResult.total,
-      finalPrice: parseFloat((price + llpaResult.total).toFixed(3)),
-    }));
+    const adjustedRates = baseRates.map(({ rate, price }) => {
+      // Client-visible LLPA total (does not include margin)
+      const visibleLlpa = llpaResult.total;
+      // Internal calculation includes hidden margin
+      const internalPrice = price + llpaResult.total + MARGIN_DEDUCTION;
 
-    // Filter to show rates where finalPrice is reasonable (95-105 range typically)
-    const eligibleRates = adjustedRates.filter(r => r.finalPrice >= 97 && r.finalPrice <= 106);
+      return {
+        rate: rate,
+        basePrice: price,
+        llpaTotal: visibleLlpa, // What client sees
+        finalPrice: parseFloat(internalPrice.toFixed(3)), // Actual final price with margin applied
+      };
+    });
+
+    // Filter to 99.000 - 101.000 range and stop at lowest rate reaching 101
+    const MIN_PRICE = 99.000;
+    const MAX_PRICE = 101.000;
+
+    // Sort by rate ascending (lowest rate first)
+    const sortedRates = [...adjustedRates].sort((a, b) => a.rate - b.rate);
+
+    // Find eligible rates within range
+    const eligibleRates = [];
+    for (const rateObj of sortedRates) {
+      if (rateObj.finalPrice >= MIN_PRICE && rateObj.finalPrice <= MAX_PRICE) {
+        eligibleRates.push(rateObj);
+        // Stop at the lowest rate that reaches 101.000 (highest price in range)
+        if (rateObj.finalPrice >= MAX_PRICE) {
+          break;
+        }
+      }
+    }
+
+    // Sort final results by rate for display (lowest rate = highest price first)
+    eligibleRates.sort((a, b) => a.rate - b.rate);
 
     return {
       program: program.name,
       programKey,
       ltv: ltv.toFixed(2),
       ltvBucket,
-      llpaTotal: llpaResult.total,
+      llpaTotal: llpaResult.total, // Visible LLPA (no margin shown)
       adjustments: llpaResult.adjustments,
-      rates: eligibleRates.length > 0 ? eligibleRates : adjustedRates.slice(0, 10),
+      rates: eligibleRates,
       allRates: adjustedRates,
     };
   }

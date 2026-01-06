@@ -1,28 +1,31 @@
 export const PillGroup = ({ label, options, selected, onChange, disabledOptions = [] }) => (
   <div className="mb-4">
     {label && (
-      <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-        {label}
-      </label>
+      <label className="label">{label}</label>
     )}
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          disabled={disabledOptions.includes(opt)}
-          className={`
-            px-4 py-2 text-sm font-bold rounded-full border transition-all duration-200
-            ${selected === opt
-              ? 'bg-black text-white border-black shadow-lg scale-105'
-              : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'
-            }
-            ${disabledOptions.includes(opt) ? 'opacity-30 cursor-not-allowed bg-gray-100' : ''}
-          `}
-        >
-          {opt}
-        </button>
-      ))}
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((opt) => {
+        const isSelected = selected === opt;
+        const isDisabled = disabledOptions.includes(opt);
+
+        return (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            disabled={isDisabled}
+            className={`
+              px-3 py-1.5 text-[13px] font-medium rounded-md border transition-all duration-150
+              ${isSelected
+                ? 'bg-[#09090B] text-white border-[#09090B]'
+                : 'bg-white text-[#71717A] border-[#E4E4E7] hover:border-[#A1A1AA] hover:text-[#09090B]'
+              }
+              ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            {opt}
+          </button>
+        );
+      })}
     </div>
   </div>
 );

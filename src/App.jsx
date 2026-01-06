@@ -37,7 +37,6 @@ export default function App() {
   const [rateResults, setRateResults] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Borrower Trigger
   useEffect(() => {
     try {
       setError(null);
@@ -50,7 +49,6 @@ export default function App() {
     }
   }, [formData.citizenship, formData.fthb, formData.docType, formData.occupancy, formData.dscrRatio]);
 
-  // LTV Calculation
   useEffect(() => {
     const bucket = DefyPricingLogic.getLTVBucket(formData.loanAmount, formData.purchasePrice);
     const ltv = DefyPricingLogic.calculateLTV(formData.loanAmount, formData.purchasePrice);
@@ -58,7 +56,6 @@ export default function App() {
     setRawLtv(ltv);
   }, [formData.purchasePrice, formData.loanAmount]);
 
-  // State Licensing Filter
   useEffect(() => {
     setAvailableStates(DefyPricingLogic.getAllowedStates(formData.docType));
   }, [formData.docType]);
@@ -78,53 +75,53 @@ export default function App() {
       const results = PricingEngine.calculateRates(formData);
       setRateResults(results);
       setIsLoading(false);
-    }, 300);
+    }, 200);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-[#FAFAFA]">
       {/* Header */}
-      <header className="bg-gray-900 text-white px-4 py-4 sticky top-0 z-40">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">
-              DEFY <span className="text-emerald-400">TPO</span>
-            </h1>
-            <p className="text-[11px] text-gray-500">Quick Pricer</p>
+      <header className="bg-white border-b border-[#E4E4E7] px-4 py-3 sticky top-0 z-40">
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#09090B] rounded-lg flex items-center justify-center">
+              <span className="text-white text-sm font-bold">D</span>
+            </div>
+            <div>
+              <h1 className="text-[15px] font-semibold text-[#09090B] leading-tight">Defy TPO</h1>
+              <p className="text-[11px] text-[#71717A]">Wholesale Pricing</p>
+            </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-gray-500 uppercase">LTV</p>
-            <p className="text-xl font-bold text-emerald-400">{rawLtv}%</p>
+            <p className="text-[10px] text-[#71717A] uppercase tracking-wide">LTV</p>
+            <p className="text-lg font-semibold text-[#007FFF]">{rawLtv}%</p>
           </div>
         </div>
       </header>
 
       {/* Error Banner */}
       {error && (
-        <div className="max-w-xl mx-auto px-4 pt-3">
-          <div className="bg-red-500 text-white p-3 rounded-lg text-sm font-medium">
+        <div className="max-w-lg mx-auto px-4 pt-3">
+          <div className="bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] p-3 rounded-lg text-sm font-medium">
             {error}
           </div>
         </div>
       )}
 
-      <main className="max-w-xl mx-auto px-4 py-4 pb-24 space-y-4">
+      <main className="max-w-lg mx-auto px-4 py-4 pb-24 space-y-4">
 
         {/* Borrower Section */}
-        <section className="bg-white rounded-xl p-4 shadow-sm">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-800 mb-4 pb-2 border-b">
-            Borrower
-          </h2>
-
-          <div className="space-y-4">
+        <section className="bg-white rounded-xl border border-[#E4E4E7] overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#E4E4E7]">
+            <h2 className="text-[13px] font-semibold text-[#09090B]">Borrower</h2>
+          </div>
+          <div className="p-4 space-y-4">
             <div>
-              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                Scenario Name
-              </label>
+              <label className="label">Scenario Name</label>
               <input
                 type="text"
                 placeholder="e.g., Smith - Purchase"
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-gray-400 focus:outline-none"
+                className="input-base"
                 value={formData.scenarioName}
                 onChange={(e) => setFormData({ ...formData, scenarioName: e.target.value })}
               />
@@ -149,7 +146,7 @@ export default function App() {
               }
             />
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4 py-1 border-t border-b border-[#E4E4E7]">
               <SmartToggle
                 label="First Time Buyer"
                 checked={formData.fthb}
@@ -163,11 +160,9 @@ export default function App() {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                Credit Score
-              </label>
+              <label className="label">Credit Score</label>
               <select
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                className="select-base"
                 value={formData.creditScore}
                 onChange={(e) => setFormData({ ...formData, creditScore: e.target.value })}
               >
@@ -184,43 +179,43 @@ export default function App() {
             </div>
 
             {formData.adverseCredit && (
-              <div className="p-3 bg-red-50 rounded-lg border border-red-100 space-y-3">
-                <p className="text-[11px] font-bold uppercase text-red-700">Derogatory Details</p>
-                <div>
-                  <label className="block text-[11px] text-gray-600 mb-1">Credit Event</label>
-                  <select
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={formData.creditEvent}
-                    onChange={(e) => setFormData({ ...formData, creditEvent: e.target.value })}
-                  >
-                    <option>None</option>
-                    <option>≥48m</option>
-                    <option>≤47m</option>
-                    <option>≥36m</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-gray-600 mb-1">Housing History</label>
-                  <select
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={formData.housingHistory}
-                    onChange={(e) => setFormData({ ...formData, housingHistory: e.target.value })}
-                  >
-                    <option>0x30x12</option>
-                    <option>0x30x24</option>
-                    <option>1x30x12</option>
-                    <option>≥1x30x12</option>
-                  </select>
+              <div className="p-3 bg-[#FEF2F2] rounded-lg border border-[#FECACA] space-y-3 animate-fade-in">
+                <p className="text-[11px] font-semibold text-[#DC2626] uppercase">Derogatory Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-[#71717A]">Credit Event</label>
+                    <select
+                      className="select-base mt-1"
+                      value={formData.creditEvent}
+                      onChange={(e) => setFormData({ ...formData, creditEvent: e.target.value })}
+                    >
+                      <option>None</option>
+                      <option>≥48m</option>
+                      <option>≤47m</option>
+                      <option>≥36m</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#71717A]">Housing History</label>
+                    <select
+                      className="select-base mt-1"
+                      value={formData.housingHistory}
+                      onChange={(e) => setFormData({ ...formData, housingHistory: e.target.value })}
+                    >
+                      <option>0x30x12</option>
+                      <option>0x30x24</option>
+                      <option>1x30x12</option>
+                      <option>≥1x30x12</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                Income Doc Type
-              </label>
+              <label className="label">Income Doc Type</label>
               <select
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                className="select-base"
                 value={formData.docType}
                 onChange={(e) => setFormData({ ...formData, docType: e.target.value })}
               >
@@ -237,12 +232,11 @@ export default function App() {
         </section>
 
         {/* Loan Structure Section */}
-        <section className="bg-white rounded-xl p-4 shadow-sm">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-800 mb-4 pb-2 border-b">
-            Loan Structure
-          </h2>
-
-          <div className="space-y-4">
+        <section className="bg-white rounded-xl border border-[#E4E4E7] overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#E4E4E7]">
+            <h2 className="text-[13px] font-semibold text-[#09090B]">Loan Structure</h2>
+          </div>
+          <div className="p-4 space-y-4">
             <PillGroup
               label="Lien Type"
               options={['1st', '2nd']}
@@ -252,34 +246,31 @@ export default function App() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                  Property Value
-                </label>
+                <label className="label">Property Value</label>
                 <input
                   type="number"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:border-gray-400 focus:outline-none"
+                  className="input-base font-mono"
                   value={formData.purchasePrice}
                   onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
                 />
-                <p className="text-[10px] text-gray-400 mt-1">{formatCurrency(formData.purchasePrice)}</p>
+                <p className="text-[11px] text-[#71717A] mt-1">{formatCurrency(formData.purchasePrice)}</p>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                  Loan Amount
-                </label>
+                <label className="label">Loan Amount</label>
                 <input
                   type="number"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:border-gray-400 focus:outline-none"
+                  className="input-base font-mono"
                   value={formData.loanAmount}
                   onChange={(e) => setFormData({ ...formData, loanAmount: Number(e.target.value) })}
                 />
-                <p className="text-[10px] text-gray-400 mt-1">{formatCurrency(formData.loanAmount)}</p>
+                <p className="text-[11px] text-[#71717A] mt-1">{formatCurrency(formData.loanAmount)}</p>
               </div>
             </div>
 
-            <div className="bg-gray-900 text-white px-4 py-3 rounded-lg flex justify-between items-center">
-              <span className="text-xs font-medium text-gray-400">LTV Bucket</span>
-              <span className="text-base font-bold text-emerald-400">{ltvBucket}</span>
+            {/* LTV Bucket Display */}
+            <div className="flex items-center justify-between p-3 bg-[#09090B] rounded-lg">
+              <span className="text-[12px] text-[#A1A1AA]">LTV Bucket</span>
+              <span className="text-[14px] font-semibold text-[#007FFF]">{ltvBucket}</span>
             </div>
 
             <PillGroup
@@ -297,11 +288,9 @@ export default function App() {
             />
 
             <div>
-              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                Property Type
-              </label>
+              <label className="label">Property Type</label>
               <select
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                className="select-base"
                 value={formData.propertyType}
                 onChange={(e) => setFormData({ ...formData, propertyType: e.target.value })}
               >
@@ -320,19 +309,19 @@ export default function App() {
               onChange={(val) => setFormData({ ...formData, dti: val })}
             />
 
-            <SmartToggle
-              label="Escrow Waiver"
-              checked={formData.escrowWaiver}
-              onChange={(val) => setFormData({ ...formData, escrowWaiver: val })}
-            />
+            <div className="py-1 border-t border-[#E4E4E7]">
+              <SmartToggle
+                label="Escrow Waiver"
+                checked={formData.escrowWaiver}
+                onChange={(val) => setFormData({ ...formData, escrowWaiver: val })}
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                  State
-                </label>
+                <label className="label">State</label>
                 <select
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                  className="select-base"
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                 >
@@ -342,11 +331,9 @@ export default function App() {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
-                  Lock Term
-                </label>
+                <label className="label">Lock Term</label>
                 <select
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                  className="select-base"
                   value={formData.lockTerm}
                   onChange={(e) => setFormData({ ...formData, lockTerm: e.target.value })}
                 >
@@ -360,19 +347,16 @@ export default function App() {
 
         {/* Investor Settings (Conditional) */}
         {formData.occupancy === 'Investment' && (
-          <section className="bg-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-blue-800 mb-4 pb-2 border-b border-blue-200">
-              Investor Settings
-            </h2>
-
-            <div className="space-y-4">
+          <section className="bg-[#E6F2FF] rounded-xl border border-[#007FFF]/20 overflow-hidden animate-slide-up">
+            <div className="px-4 py-3 border-b border-[#007FFF]/20 bg-[#007FFF]/5">
+              <h2 className="text-[13px] font-semibold text-[#007FFF]">Investor Settings</h2>
+            </div>
+            <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase text-blue-700 mb-1.5">
-                    Prepay Period
-                  </label>
+                  <label className="label text-[#007FFF]">Prepay Period</label>
                   <select
-                    className="w-full px-3 py-2.5 border border-blue-200 rounded-lg text-sm font-medium bg-white focus:border-blue-400 focus:outline-none"
+                    className="select-base border-[#007FFF]/30 focus:border-[#007FFF]"
                     value={formData.prepayPeriod}
                     onChange={(e) => setFormData({ ...formData, prepayPeriod: e.target.value })}
                   >
@@ -385,11 +369,9 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase text-blue-700 mb-1.5">
-                    Prepay Fee
-                  </label>
+                  <label className="label text-[#007FFF]">Prepay Fee</label>
                   <select
-                    className="w-full px-3 py-2.5 border border-blue-200 rounded-lg text-sm font-medium bg-white focus:border-blue-400 focus:outline-none"
+                    className="select-base border-[#007FFF]/30 focus:border-[#007FFF]"
                     value={formData.prepayFee}
                     onChange={(e) => setFormData({ ...formData, prepayFee: e.target.value })}
                   >
@@ -401,7 +383,7 @@ export default function App() {
               </div>
 
               {formData.docType === 'DSCR' && (
-                <>
+                <div className="pt-3 border-t border-[#007FFF]/20 space-y-3">
                   <PillGroup
                     label="DSCR Ratio"
                     options={['≥1.25', '1.15-1.249', '1.00-1.149', '0.75-0.999']}
@@ -413,7 +395,7 @@ export default function App() {
                     checked={formData.dscrShortTermRental}
                     onChange={(val) => setFormData({ ...formData, dscrShortTermRental: val })}
                   />
-                </>
+                </div>
               )}
             </div>
           </section>
@@ -421,14 +403,24 @@ export default function App() {
       </main>
 
       {/* Fixed Bottom Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg">
-        <div className="max-w-xl mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E4E4E7]">
+        <div className="max-w-lg mx-auto">
           <button
             onClick={handleGetRates}
             disabled={isLoading}
-            className="w-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-base py-4 rounded-xl shadow-lg transition disabled:opacity-50"
+            className="w-full bg-[#007FFF] hover:bg-[#0066CC] active:bg-[#0052A3] text-white font-medium text-[15px] py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Calculating...' : 'GET RATES'}
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Calculating...
+              </span>
+            ) : (
+              'Get Rates'
+            )}
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 /**
  * Rate Results Display Component
- * Shows calculated rates in a clean, professional format
+ * Stripe-inspired clean design with shadcn styling
  */
 
 export function RateResults({ results, onClose }) {
@@ -9,141 +9,165 @@ export function RateResults({ results, onClose }) {
   const { program, ltv, ltvBucket, llpaTotal, adjustments, rates, error } = results;
 
   // Find par rate (closest to 100)
-  const parRate = rates.reduce((prev, curr) =>
-    Math.abs(curr.finalPrice - 100) < Math.abs(prev.finalPrice - 100) ? curr : prev,
-    rates[0]
-  );
+  const parRate = rates.length > 0
+    ? rates.reduce((prev, curr) =>
+        Math.abs(curr.finalPrice - 100) < Math.abs(prev.finalPrice - 100) ? curr : prev,
+        rates[0]
+      )
+    : null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-2xl animate-slide-up">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center animate-fade-in">
+      <div className="bg-white w-full max-w-md max-h-[85vh] overflow-hidden rounded-t-xl sm:rounded-xl shadow-2xl animate-slide-up flex flex-col">
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-gray-900 to-gray-800 text-white p-5 sticky top-0">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider">Program</p>
-              <h2 className="text-xl font-bold">{program}</h2>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white text-2xl leading-none"
-            >
-              ×
-            </button>
+        <div className="px-5 py-4 border-b border-[#E4E4E7] flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-medium text-[#71717A] uppercase tracking-wide">Rate Sheet</p>
+            <h2 className="text-lg font-semibold text-[#09090B]">{program}</h2>
           </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#F4F4F5] text-[#71717A] hover:text-[#09090B] transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 4L4 12M4 4l8 8" />
+            </svg>
+          </button>
+        </div>
 
-          {/* LTV Badge */}
-          <div className="flex gap-4 mt-3">
-            <div className="bg-white/10 px-3 py-1.5 rounded-lg">
-              <span className="text-xs text-gray-400">LTV</span>
-              <span className="text-sm font-bold ml-2 text-green-400">{ltv}%</span>
-            </div>
-            <div className="bg-white/10 px-3 py-1.5 rounded-lg">
-              <span className="text-xs text-gray-400">Bucket</span>
-              <span className="text-sm font-bold ml-2 text-green-400">{ltvBucket}</span>
-            </div>
-            <div className="bg-white/10 px-3 py-1.5 rounded-lg">
-              <span className="text-xs text-gray-400">LLPA</span>
-              <span className={`text-sm font-bold ml-2 ${llpaTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {llpaTotal >= 0 ? '+' : ''}{llpaTotal.toFixed(3)}
-              </span>
-            </div>
+        {/* Stats Row */}
+        <div className="px-5 py-3 bg-[#FAFAFA] border-b border-[#E4E4E7] flex gap-4">
+          <div>
+            <p className="text-[10px] font-medium text-[#71717A] uppercase">LTV</p>
+            <p className="text-sm font-semibold text-[#09090B]">{ltv}%</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium text-[#71717A] uppercase">Bucket</p>
+            <p className="text-sm font-semibold text-[#09090B]">{ltvBucket}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium text-[#71717A] uppercase">Adj</p>
+            <p className={`text-sm font-semibold ${llpaTotal >= 0 ? 'text-[#007FFF]' : 'text-[#DC2626]'}`}>
+              {llpaTotal >= 0 ? '+' : ''}{llpaTotal?.toFixed(3)}
+            </p>
           </div>
         </div>
 
-        {/* Error State */}
-        {error && (
-          <div className="p-5 bg-red-50 border-b border-red-100">
-            <p className="text-red-700 font-semibold">{error}</p>
-          </div>
-        )}
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
 
-        {/* Rate Grid */}
-        {rates.length > 0 && (
-          <div className="p-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
-              Available Rates
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {rates.slice(0, 12).map((r, idx) => {
-                const isPar = r.rate === parRate?.rate;
-                const isRebate = r.finalPrice > 100;
-                const isCost = r.finalPrice < 100;
-
-                return (
-                  <div
-                    key={idx}
-                    className={`
-                      p-3 rounded-lg border-2 transition-all cursor-pointer hover:scale-105
-                      ${isPar
-                        ? 'border-green-500 bg-green-50 shadow-lg'
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'}
-                    `}
-                  >
-                    <div className="text-center">
-                      <p className={`text-lg font-black ${isPar ? 'text-green-700' : 'text-gray-900'}`}>
-                        {r.rate.toFixed(3)}%
-                      </p>
-                      <p className={`text-sm font-bold ${
-                        isRebate ? 'text-green-600' : isCost ? 'text-red-600' : 'text-gray-600'
-                      }`}>
-                        {r.finalPrice.toFixed(3)}
-                      </p>
-                      {isPar && (
-                        <span className="text-[10px] uppercase font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-                          Par
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+          {/* Error State */}
+          {error && (
+            <div className="p-4 m-4 bg-[#FEF2F2] border border-[#FECACA] rounded-lg">
+              <p className="text-sm text-[#DC2626] font-medium">{error}</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* LLPA Breakdown */}
-        {adjustments && adjustments.length > 0 && (
-          <div className="p-4 border-t">
-            <details className="group">
-              <summary className="text-xs font-bold uppercase tracking-wider text-gray-500 cursor-pointer flex items-center justify-between">
-                LLPA Breakdown
-                <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
-              </summary>
-              <div className="mt-3 space-y-1">
-                {adjustments.map((adj, idx) => (
-                  <div key={idx} className="flex justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
-                    <span className="text-gray-600">
-                      {adj.name} <span className="text-gray-400">({adj.key})</span>
-                    </span>
-                    <span className={`font-mono font-bold ${
-                      adj.value > 0 ? 'text-green-600' : adj.value < 0 ? 'text-red-600' : 'text-gray-500'
-                    }`}>
-                      {adj.value > 0 ? '+' : ''}{adj.value.toFixed(3)}
+          {/* Rate Grid */}
+          {rates.length > 0 && (
+            <div className="p-4">
+              <p className="text-[11px] font-medium text-[#71717A] uppercase tracking-wide mb-3">
+                Available Rates ({rates.length})
+              </p>
+              <div className="space-y-2">
+                {rates.map((r, idx) => {
+                  const isPar = parRate && r.rate === parRate.rate;
+                  const isRebate = r.finalPrice > 100;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`
+                        flex items-center justify-between p-3 rounded-lg border transition-all
+                        ${isPar
+                          ? 'border-[#007FFF] bg-[#E6F2FF]'
+                          : 'border-[#E4E4E7] bg-white hover:border-[#A1A1AA]'
+                        }
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`
+                          w-2 h-2 rounded-full
+                          ${isPar ? 'bg-[#007FFF]' : isRebate ? 'bg-[#10B981]' : 'bg-[#F59E0B]'}
+                        `} />
+                        <span className="text-base font-semibold text-[#09090B]">
+                          {r.rate.toFixed(3)}%
+                        </span>
+                        {isPar && (
+                          <span className="text-[10px] font-semibold text-[#007FFF] bg-white px-2 py-0.5 rounded">
+                            PAR
+                          </span>
+                        )}
+                      </div>
+                      <span className={`
+                        text-sm font-mono font-semibold
+                        ${isRebate ? 'text-[#10B981]' : 'text-[#F59E0B]'}
+                      `}>
+                        {r.finalPrice.toFixed(3)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* No Rates Message */}
+          {rates.length === 0 && !error && (
+            <div className="p-8 text-center">
+              <p className="text-[#71717A] text-sm">No rates available in the 99-101 price range for this scenario.</p>
+            </div>
+          )}
+
+          {/* LLPA Breakdown */}
+          {adjustments && adjustments.length > 0 && (
+            <div className="px-4 pb-4">
+              <details className="group">
+                <summary className="flex items-center justify-between text-[11px] font-medium text-[#71717A] uppercase tracking-wide cursor-pointer py-2 hover:text-[#09090B]">
+                  <span>LLPA Breakdown</span>
+                  <svg
+                    className="w-4 h-4 transition-transform group-open:rotate-180"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="mt-2 p-3 bg-[#FAFAFA] rounded-lg border border-[#E4E4E7]">
+                  {adjustments.map((adj, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between text-[13px] py-1.5 border-b border-[#E4E4E7] last:border-0"
+                    >
+                      <span className="text-[#71717A]">{adj.name}</span>
+                      <span className={`font-mono font-medium ${
+                        adj.value > 0 ? 'text-[#10B981]' : adj.value < 0 ? 'text-[#DC2626]' : 'text-[#71717A]'
+                      }`}>
+                        {adj.value > 0 ? '+' : ''}{adj.value.toFixed(3)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-[13px] pt-2 mt-2 border-t border-[#09090B]/10 font-semibold">
+                    <span className="text-[#09090B]">Total</span>
+                    <span className={`font-mono ${llpaTotal >= 0 ? 'text-[#10B981]' : 'text-[#DC2626]'}`}>
+                      {llpaTotal >= 0 ? '+' : ''}{llpaTotal?.toFixed(3)}
                     </span>
                   </div>
-                ))}
-                <div className="flex justify-between text-sm py-2 border-t-2 border-gray-200 font-bold">
-                  <span>Total LLPA</span>
-                  <span className={`font-mono ${
-                    llpaTotal > 0 ? 'text-green-600' : llpaTotal < 0 ? 'text-red-600' : 'text-gray-700'
-                  }`}>
-                    {llpaTotal > 0 ? '+' : ''}{llpaTotal.toFixed(3)}
-                  </span>
                 </div>
-              </div>
-            </details>
-          </div>
-        )}
+              </details>
+            </div>
+          )}
+        </div>
 
         {/* Footer */}
-        <div className="p-4 border-t bg-gray-50">
+        <div className="p-4 border-t border-[#E4E4E7] bg-[#FAFAFA]">
           <button
             onClick={onClose}
-            className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800 transition"
+            className="w-full bg-[#09090B] hover:bg-[#27272A] text-white font-medium py-2.5 rounded-lg transition-colors"
           >
-            Close
+            Done
           </button>
         </div>
       </div>
