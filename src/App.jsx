@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { PillGroup, SmartToggle } from './components';
+import { PillGroup, SmartToggle, RateResults } from './components';
 import { DefyPricingLogic } from './logic/DefyPricingLogic';
+import { PricingEngine } from './logic/PricingEngine';
 
 export default function App() {
-  // --- STATE ---
   const [formData, setFormData] = useState({
     scenarioName: '',
     citizenship: 'US Citizen',
@@ -13,9 +13,7 @@ export default function App() {
     adverseCredit: false,
     creditEvent: 'None',
     housingHistory: '0x30x12',
-    docType: '1yr Full Doc',
-
-    // Loan Details
+    docType: '12m Bank Stmts',
     lienType: '1st',
     purchasePrice: 800000,
     loanAmount: 560000,
@@ -26,8 +24,6 @@ export default function App() {
     escrowWaiver: false,
     state: 'CA',
     lockTerm: '30 Day',
-
-    // Investor Details
     prepayPeriod: '3yr',
     prepayFee: '5% (Standard)',
     dscrRatio: '≥1.25',
@@ -38,10 +34,10 @@ export default function App() {
   const [rawLtv, setRawLtv] = useState('');
   const [availableStates, setAvailableStates] = useState([]);
   const [error, setError] = useState(null);
+  const [rateResults, setRateResults] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // --- REACTIVE TRIGGERS ---
-
-  // 1. Borrower Trigger (Foreign National & FTHB)
+  // Borrower Trigger
   useEffect(() => {
     try {
       setError(null);
@@ -54,7 +50,7 @@ export default function App() {
     }
   }, [formData.citizenship, formData.fthb, formData.docType, formData.occupancy, formData.dscrRatio]);
 
-  // 2. Math Trigger (LTV Calculation)
+  // LTV Calculation
   useEffect(() => {
     const bucket = DefyPricingLogic.getLTVBucket(formData.loanAmount, formData.purchasePrice);
     const ltv = DefyPricingLogic.calculateLTV(formData.loanAmount, formData.purchasePrice);
@@ -62,12 +58,11 @@ export default function App() {
     setRawLtv(ltv);
   }, [formData.purchasePrice, formData.loanAmount]);
 
-  // 3. Licensing Filter
+  // State Licensing Filter
   useEffect(() => {
     setAvailableStates(DefyPricingLogic.getAllowedStates(formData.docType));
   }, [formData.docType]);
 
-  // Format currency input
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -77,390 +72,374 @@ export default function App() {
     }).format(value);
   };
 
-  // --- RENDER ---
-  return (
-    <div className="max-w-2xl mx-auto bg-gray-50 min-h-screen pb-28 font-sans">
+  const handleGetRates = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      const results = PricingEngine.calculateRates(formData);
+      setRateResults(results);
+      setIsLoading(false);
+    }, 300);
+  };
 
+  return (
+    <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="bg-black text-white p-6 sticky top-0 z-50 shadow-md">
-        <div className="flex items-center justify-between">
+      <header className="bg-gray-900 text-white px-4 py-4 sticky top-0 z-40">
+        <div className="max-w-xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight">
-              DEFY <span className="text-green-400">TPO</span>
+            <h1 className="text-lg font-bold tracking-tight">
+              DEFY <span className="text-emerald-400">TPO</span>
             </h1>
-            <p className="text-xs text-gray-400">Quick Pricer - Wholesale</p>
+            <p className="text-[11px] text-gray-500">Quick Pricer</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-400">LTV</p>
-            <p className="text-2xl font-bold text-green-400">{rawLtv}%</p>
+            <p className="text-[10px] text-gray-500 uppercase">LTV</p>
+            <p className="text-xl font-bold text-emerald-400">{rawLtv}%</p>
           </div>
         </div>
       </header>
 
       {/* Error Banner */}
       {error && (
-        <div className="bg-red-500 text-white p-4 m-4 rounded-lg font-bold animate-fade-in">
-          ⚠️ {error}
+        <div className="max-w-xl mx-auto px-4 pt-3">
+          <div className="bg-red-500 text-white p-3 rounded-lg text-sm font-medium">
+            {error}
+          </div>
         </div>
       )}
 
-      <div className="p-4 space-y-4">
+      <main className="max-w-xl mx-auto px-4 py-4 pb-24 space-y-4">
 
-        {/* SECTION 1: BORROWER */}
-        <section className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black uppercase tracking-tight mb-4 border-b pb-2">
-            Borrower Data
+        {/* Borrower Section */}
+        <section className="bg-white rounded-xl p-4 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-800 mb-4 pb-2 border-b">
+            Borrower
           </h2>
 
-          {/* Scenario Name */}
-          <div className="mb-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-              Scenario Name (Optional)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g., Smith - Purchase"
-              className="w-full p-3 border rounded-lg focus:border-black outline-none"
-              value={formData.scenarioName}
-              onChange={(e) => setFormData({ ...formData, scenarioName: e.target.value })}
-            />
-          </div>
-
-          {/* Citizenship */}
-          <PillGroup
-            label="Citizenship"
-            options={['US Citizen', 'Perm-Resident', 'Non-Perm Resident', 'Foreign National', 'ITIN']}
-            selected={formData.citizenship}
-            onChange={(val) => setFormData({ ...formData, citizenship: val })}
-          />
-
-          {/* Occupancy */}
-          <PillGroup
-            label="Occupancy"
-            options={['Primary', 'Second Home', 'Investment']}
-            selected={formData.occupancy}
-            onChange={(val) => setFormData({ ...formData, occupancy: val })}
-            disabledOptions={
-              formData.citizenship === 'Foreign National' || formData.docType === 'DSCR'
-                ? ['Primary', 'Second Home']
-                : formData.fthb
-                ? ['Second Home']
-                : []
-            }
-          />
-
-          {/* FTHB & Adverse Credit Toggles */}
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <SmartToggle
-              label="First Time Buyer"
-              checked={formData.fthb}
-              onChange={(val) => setFormData({ ...formData, fthb: val })}
-            />
-            <SmartToggle
-              label="Adverse Credit"
-              checked={formData.adverseCredit}
-              onChange={(val) => setFormData({ ...formData, adverseCredit: val })}
-            />
-          </div>
-
-          {/* Credit Score */}
-          <div className="mt-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-              Credit Score
-            </label>
-            <select
-              className="w-full p-3 bg-gray-50 border rounded-lg font-semibold"
-              value={formData.creditScore}
-              onChange={(e) => setFormData({ ...formData, creditScore: e.target.value })}
-            >
-              <option>≥780</option>
-              <option>760-779</option>
-              <option>740-759</option>
-              <option>720-739</option>
-              <option>700-719</option>
-              <option>680-699</option>
-              <option>660-679</option>
-              <option>640-659</option>
-              <option>620-639</option>
-              <option>Foreign National - No Score</option>
-            </select>
-          </div>
-
-          {/* CONDITIONAL: Adverse Credit Details */}
-          {formData.adverseCredit && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-100 rounded-lg animate-fade-in">
-              <h3 className="text-xs font-bold text-red-800 uppercase mb-3">
-                Derogatory Details
-              </h3>
-
-              <div className="mb-3">
-                <label className="text-xs font-bold text-gray-600">Credit Event (BK/FC)</label>
-                <select
-                  className="w-full mt-1 p-2 border rounded"
-                  value={formData.creditEvent}
-                  onChange={(e) => setFormData({ ...formData, creditEvent: e.target.value })}
-                >
-                  <option>None</option>
-                  <option>≥48m</option>
-                  <option>≤47m</option>
-                  <option>≥36m</option>
-                  <option>≥36m - 47m</option>
-                  <option>≥24m - 35m</option>
-                  <option>≥12m - 23m</option>
-                  <option>≤11m (Null)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-600">Housing History</label>
-                <select
-                  className="w-full mt-1 p-2 border rounded"
-                  value={formData.housingHistory}
-                  onChange={(e) => setFormData({ ...formData, housingHistory: e.target.value })}
-                >
-                  <option>None</option>
-                  <option>0x30x12</option>
-                  <option>0x30x24</option>
-                  <option>1x30x12</option>
-                  <option>≥1x30x12</option>
-                  <option>≥2x30x12</option>
-                  <option>≥0x60x12</option>
-                  <option>≥1x60x12</option>
-                  <option>0x90x12</option>
-                  <option>1x90x12 (Null)</option>
-                </select>
-              </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                Scenario Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., Smith - Purchase"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-gray-400 focus:outline-none"
+                value={formData.scenarioName}
+                onChange={(e) => setFormData({ ...formData, scenarioName: e.target.value })}
+              />
             </div>
-          )}
 
-          {/* Income Doc Type */}
-          <div className="mt-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-              Income Doc Type
-            </label>
-            <select
-              className="w-full p-3 bg-gray-50 border rounded-lg font-semibold"
-              value={formData.docType}
-              onChange={(e) => setFormData({ ...formData, docType: e.target.value })}
-            >
-              <option>DSCR</option>
-              <option>1yr Full Doc</option>
-              <option>12m Bank Stmts</option>
-              <option>2yr Full Doc</option>
-              <option>24m Bank Stmts</option>
-              <option>Asset Depletion-Utilization</option>
-              <option>1yr 1099 Only</option>
-              <option>1yr WVOE Only</option>
-              <option>1yr CPA P&L w/2m Bank Stmts</option>
-              <option>1yr CPA P&L ONLY</option>
-              <option>Full Doc (other)</option>
-              <option>Alt Doc (other)</option>
-            </select>
+            <PillGroup
+              label="Citizenship"
+              options={['US Citizen', 'Perm-Resident', 'Non-Perm Resident', 'Foreign National', 'ITIN']}
+              selected={formData.citizenship}
+              onChange={(val) => setFormData({ ...formData, citizenship: val })}
+            />
+
+            <PillGroup
+              label="Occupancy"
+              options={['Primary', 'Second Home', 'Investment']}
+              selected={formData.occupancy}
+              onChange={(val) => setFormData({ ...formData, occupancy: val })}
+              disabledOptions={
+                formData.citizenship === 'Foreign National' || formData.docType === 'DSCR'
+                  ? ['Primary', 'Second Home']
+                  : formData.fthb ? ['Second Home'] : []
+              }
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <SmartToggle
+                label="First Time Buyer"
+                checked={formData.fthb}
+                onChange={(val) => setFormData({ ...formData, fthb: val })}
+              />
+              <SmartToggle
+                label="Adverse Credit"
+                checked={formData.adverseCredit}
+                onChange={(val) => setFormData({ ...formData, adverseCredit: val })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                Credit Score
+              </label>
+              <select
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                value={formData.creditScore}
+                onChange={(e) => setFormData({ ...formData, creditScore: e.target.value })}
+              >
+                <option>≥780</option>
+                <option>760-779</option>
+                <option>740-759</option>
+                <option>720-739</option>
+                <option>700-719</option>
+                <option>680-699</option>
+                <option>660-679</option>
+                <option>640-659</option>
+                <option>620-639</option>
+              </select>
+            </div>
+
+            {formData.adverseCredit && (
+              <div className="p-3 bg-red-50 rounded-lg border border-red-100 space-y-3">
+                <p className="text-[11px] font-bold uppercase text-red-700">Derogatory Details</p>
+                <div>
+                  <label className="block text-[11px] text-gray-600 mb-1">Credit Event</label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    value={formData.creditEvent}
+                    onChange={(e) => setFormData({ ...formData, creditEvent: e.target.value })}
+                  >
+                    <option>None</option>
+                    <option>≥48m</option>
+                    <option>≤47m</option>
+                    <option>≥36m</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-600 mb-1">Housing History</label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    value={formData.housingHistory}
+                    onChange={(e) => setFormData({ ...formData, housingHistory: e.target.value })}
+                  >
+                    <option>0x30x12</option>
+                    <option>0x30x24</option>
+                    <option>1x30x12</option>
+                    <option>≥1x30x12</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                Income Doc Type
+              </label>
+              <select
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                value={formData.docType}
+                onChange={(e) => setFormData({ ...formData, docType: e.target.value })}
+              >
+                <option>DSCR</option>
+                <option>1yr Full Doc</option>
+                <option>12m Bank Stmts</option>
+                <option>24m Bank Stmts</option>
+                <option>Asset Depletion</option>
+                <option>1yr 1099 Only</option>
+                <option>1yr WVOE Only</option>
+              </select>
+            </div>
           </div>
         </section>
 
-        {/* SECTION 2: LOAN DETAILS */}
-        <section className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black uppercase tracking-tight mb-4 border-b pb-2">
+        {/* Loan Structure Section */}
+        <section className="bg-white rounded-xl p-4 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-800 mb-4 pb-2 border-b">
             Loan Structure
           </h2>
 
-          {/* Lien Type */}
-          <PillGroup
-            label="Lien Type"
-            options={['1st', '2nd']}
-            selected={formData.lienType}
-            onChange={(val) => setFormData({ ...formData, lienType: val })}
-          />
+          <div className="space-y-4">
+            <PillGroup
+              label="Lien Type"
+              options={['1st', '2nd']}
+              selected={formData.lienType}
+              onChange={(val) => setFormData({ ...formData, lienType: val })}
+            />
 
-          {/* Price & Loan Amount */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Property Value
-              </label>
-              <input
-                type="number"
-                className="w-full text-lg font-mono p-3 border-b-2 border-gray-200 focus:border-black outline-none bg-transparent"
-                value={formData.purchasePrice}
-                onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
-              />
-              <p className="text-xs text-gray-400 mt-1">{formatCurrency(formData.purchasePrice)}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                  Property Value
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:border-gray-400 focus:outline-none"
+                  value={formData.purchasePrice}
+                  onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">{formatCurrency(formData.purchasePrice)}</p>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                  Loan Amount
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:border-gray-400 focus:outline-none"
+                  value={formData.loanAmount}
+                  onChange={(e) => setFormData({ ...formData, loanAmount: Number(e.target.value) })}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">{formatCurrency(formData.loanAmount)}</p>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Loan Amount
-              </label>
-              <input
-                type="number"
-                className="w-full text-lg font-mono p-3 border-b-2 border-gray-200 focus:border-black outline-none bg-transparent"
-                value={formData.loanAmount}
-                onChange={(e) => setFormData({ ...formData, loanAmount: Number(e.target.value) })}
-              />
-              <p className="text-xs text-gray-400 mt-1">{formatCurrency(formData.loanAmount)}</p>
+
+            <div className="bg-gray-900 text-white px-4 py-3 rounded-lg flex justify-between items-center">
+              <span className="text-xs font-medium text-gray-400">LTV Bucket</span>
+              <span className="text-base font-bold text-emerald-400">{ltvBucket}</span>
             </div>
-          </div>
 
-          {/* Calculated LTV Bucket Display */}
-          <div className="bg-black text-white px-4 py-3 rounded-lg flex justify-between items-center mb-6">
-            <span className="text-sm font-medium">LTV Bucket</span>
-            <span className="text-lg font-bold text-green-400">{ltvBucket}</span>
-          </div>
+            <PillGroup
+              label="Loan Purpose"
+              options={['Purchase', 'Rate/Term', 'Cash-Out']}
+              selected={formData.loanPurpose}
+              onChange={(val) => setFormData({ ...formData, loanPurpose: val })}
+            />
 
-          {/* Loan Purpose */}
-          <PillGroup
-            label="Loan Purpose"
-            options={['Purchase', 'Rate/Term', 'Cash-Out']}
-            selected={formData.loanPurpose}
-            onChange={(val) => setFormData({ ...formData, loanPurpose: val })}
-          />
+            <PillGroup
+              label="Loan Product"
+              options={['30yr Fixed Rate', 'Interest-Only (30yr)', 'Interest-Only (40yr)']}
+              selected={formData.loanProduct}
+              onChange={(val) => setFormData({ ...formData, loanProduct: val })}
+            />
 
-          {/* Loan Product */}
-          <PillGroup
-            label="Loan Product"
-            options={['30yr Fixed Rate', 'Interest-Only (30yr)', 'Interest-Only (40yr)', '40yr Fixed', '15yr Fixed']}
-            selected={formData.loanProduct}
-            onChange={(val) => setFormData({ ...formData, loanProduct: val })}
-          />
+            <div>
+              <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                Property Type
+              </label>
+              <select
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                value={formData.propertyType}
+                onChange={(e) => setFormData({ ...formData, propertyType: e.target.value })}
+              >
+                <option>SFR/Single Family</option>
+                <option>Condo</option>
+                <option>2-4 Unit</option>
+                <option>2 Unit</option>
+                <option>3-4 Unit</option>
+              </select>
+            </div>
 
-          {/* Property Type */}
-          <div className="mt-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-              Property Type
-            </label>
-            <select
-              className="w-full p-3 bg-gray-50 border rounded-lg font-semibold"
-              value={formData.propertyType}
-              onChange={(e) => setFormData({ ...formData, propertyType: e.target.value })}
-            >
-              <option>SFR/Single Family</option>
-              <option>Condo</option>
-              <option>2-4 Unit</option>
-              <option>Condo (Non-Warrantable)</option>
-              <option>Condotel</option>
-              <option>2 Unit</option>
-              <option>3-4 Unit</option>
-              <option>2-8 UNIT (Mixed Use)</option>
-              <option>9-10 UNIT (Mixed Use)</option>
-              <option>5-9 UNIT (Residential Use)</option>
-            </select>
-          </div>
+            <PillGroup
+              label="DTI"
+              options={['≤43%', '43.01%-50%', '50.01%-55%']}
+              selected={formData.dti}
+              onChange={(val) => setFormData({ ...formData, dti: val })}
+            />
 
-          {/* DTI */}
-          <PillGroup
-            label="DTI"
-            options={['≤43%', '43.01%-50%', '50.01%-55%']}
-            selected={formData.dti}
-            onChange={(val) => setFormData({ ...formData, dti: val })}
-          />
-
-          {/* Escrow Waiver */}
-          <div className="mt-4">
             <SmartToggle
               label="Escrow Waiver"
               checked={formData.escrowWaiver}
               onChange={(val) => setFormData({ ...formData, escrowWaiver: val })}
             />
-          </div>
 
-          {/* State */}
-          <div className="mt-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-              State License
-            </label>
-            <select
-              className="w-full p-3 bg-gray-50 border rounded-lg font-semibold"
-              value={formData.state}
-              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-            >
-              {availableStates.map((st) => (
-                <option key={st} value={st}>{st}</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-400 mt-1">
-              {formData.docType === 'DSCR' ? 'DSCR: All states available' : 'Limited states for this doc type'}
-            </p>
-          </div>
-
-          {/* Lock Term */}
-          <PillGroup
-            label="Lock Term"
-            options={['30 Day', '45 Day']}
-            selected={formData.lockTerm}
-            onChange={(val) => setFormData({ ...formData, lockTerm: val })}
-          />
-        </section>
-
-        {/* SECTION 3: INVESTOR DETAILS (Conditional) */}
-        {formData.occupancy === 'Investment' && (
-          <section className="bg-blue-50 p-5 rounded-xl shadow-sm border border-blue-100 animate-slide-up">
-            <h2 className="text-lg font-black uppercase tracking-tight text-blue-900 mb-4 border-b border-blue-200 pb-2">
-              Investor Settings
-            </h2>
-
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-blue-800 uppercase">Prepay Period</label>
+                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                  State
+                </label>
                 <select
-                  className="w-full mt-1 p-3 bg-white border border-blue-200 rounded-lg"
-                  value={formData.prepayPeriod}
-                  onChange={(e) => setFormData({ ...formData, prepayPeriod: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                 >
-                  <option>0 - No Prepay</option>
-                  <option>1yr</option>
-                  <option>2yr</option>
-                  <option>3yr</option>
-                  <option>4yr</option>
-                  <option>5yr</option>
+                  {availableStates.map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-blue-800 uppercase">Prepay Fee</label>
+                <label className="block text-[11px] font-semibold uppercase text-gray-500 mb-1.5">
+                  Lock Term
+                </label>
                 <select
-                  className="w-full mt-1 p-3 bg-white border border-blue-200 rounded-lg"
-                  value={formData.prepayFee}
-                  onChange={(e) => setFormData({ ...formData, prepayFee: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:border-gray-400 focus:outline-none"
+                  value={formData.lockTerm}
+                  onChange={(e) => setFormData({ ...formData, lockTerm: e.target.value })}
                 >
-                  <option>5% (Standard)</option>
-                  <option>6 Month Interest (≥3yr - AltPP)</option>
-                  <option>Declining (≥3yr - AltPP)</option>
+                  <option>30 Day</option>
+                  <option>45 Day</option>
                 </select>
               </div>
             </div>
+          </div>
+        </section>
 
-            {/* CONDITIONAL: DSCR Fields */}
-            {formData.docType === 'DSCR' && (
-              <div className="mt-4 pt-4 border-t border-blue-200">
-                <label className="text-xs font-bold text-blue-800 uppercase mb-2 block">
-                  DSCR Ratio
-                </label>
-                <PillGroup
-                  options={['≥1.25', '1.15-1.249', '1.00-1.149', '0.75-0.999', '0.50-0.749', '≤0.499 - No Ratio']}
-                  selected={formData.dscrRatio}
-                  onChange={(val) => setFormData({ ...formData, dscrRatio: val })}
-                />
+        {/* Investor Settings (Conditional) */}
+        {formData.occupancy === 'Investment' && (
+          <section className="bg-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-blue-800 mb-4 pb-2 border-b border-blue-200">
+              Investor Settings
+            </h2>
 
-                <div className="mt-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase text-blue-700 mb-1.5">
+                    Prepay Period
+                  </label>
+                  <select
+                    className="w-full px-3 py-2.5 border border-blue-200 rounded-lg text-sm font-medium bg-white focus:border-blue-400 focus:outline-none"
+                    value={formData.prepayPeriod}
+                    onChange={(e) => setFormData({ ...formData, prepayPeriod: e.target.value })}
+                  >
+                    <option>0 - No Prepay</option>
+                    <option>1yr</option>
+                    <option>2yr</option>
+                    <option>3yr</option>
+                    <option>4yr</option>
+                    <option>5yr</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase text-blue-700 mb-1.5">
+                    Prepay Fee
+                  </label>
+                  <select
+                    className="w-full px-3 py-2.5 border border-blue-200 rounded-lg text-sm font-medium bg-white focus:border-blue-400 focus:outline-none"
+                    value={formData.prepayFee}
+                    onChange={(e) => setFormData({ ...formData, prepayFee: e.target.value })}
+                  >
+                    <option>5% (Standard)</option>
+                    <option>6 Month Interest</option>
+                    <option>Declining</option>
+                  </select>
+                </div>
+              </div>
+
+              {formData.docType === 'DSCR' && (
+                <>
+                  <PillGroup
+                    label="DSCR Ratio"
+                    options={['≥1.25', '1.15-1.249', '1.00-1.149', '0.75-0.999']}
+                    selected={formData.dscrRatio}
+                    onChange={(val) => setFormData({ ...formData, dscrRatio: val })}
+                  />
                   <SmartToggle
-                    label="Short Term Rental?"
+                    label="Short Term Rental"
                     checked={formData.dscrShortTermRental}
                     onChange={(val) => setFormData({ ...formData, dscrShortTermRental: val })}
                   />
-                </div>
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </section>
         )}
-      </div>
+      </main>
 
-      {/* Floating Action Button */}
+      {/* Fixed Bottom Button */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg">
-        <div className="max-w-2xl mx-auto">
-          <button className="w-full bg-green-500 hover:bg-green-600 text-black font-extrabold text-lg py-4 rounded-2xl shadow-xl transform transition hover:scale-[1.02] active:scale-95">
-            GET RATES
+        <div className="max-w-xl mx-auto">
+          <button
+            onClick={handleGetRates}
+            disabled={isLoading}
+            className="w-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-base py-4 rounded-xl shadow-lg transition disabled:opacity-50"
+          >
+            {isLoading ? 'Calculating...' : 'GET RATES'}
           </button>
         </div>
       </div>
+
+      {/* Rate Results Modal */}
+      {rateResults && (
+        <RateResults
+          results={rateResults}
+          onClose={() => setRateResults(null)}
+        />
+      )}
     </div>
   );
 }
