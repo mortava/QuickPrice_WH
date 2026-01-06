@@ -5,8 +5,9 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set the worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure PDF.js worker - disable worker for simpler setup
+// This runs PDF parsing in the main thread but avoids worker loading issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 /**
  * Extract all text content from a PDF file
@@ -14,19 +15,32 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
  * @returns {Promise<string>} - Extracted text content
  */
 export async function extractTextFromPdf(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
 
-  let fullText = '';
+    // Load PDF with worker disabled for compatibility
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items.map(item => item.str).join(' ');
-    fullText += pageText + '\n\n';
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n\n';
+    }
+
+    return fullText;
+  } catch (error) {
+    console.error('PDF extraction error:', error);
+    throw new Error(`Failed to read PDF: ${error.message}`);
   }
-
-  return fullText;
 }
 
 /**

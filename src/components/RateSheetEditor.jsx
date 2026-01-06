@@ -80,6 +80,62 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
     updateLlpaValue(categoryKey, optionKey, bucket, newValue === null ? 'null' : newValue);
   };
 
+  // Apply value to all columns in a row
+  const applyToEntireRow = (categoryKey, optionKey, value) => {
+    const buckets = LTV_BUCKETS;
+    setSheet(prev => {
+      const newOverrides = { ...prev.llpaOverrides };
+      if (!newOverrides[categoryKey]) newOverrides[categoryKey] = {};
+      if (!newOverrides[categoryKey][optionKey]) newOverrides[categoryKey][optionKey] = {};
+
+      buckets.forEach(bucket => {
+        newOverrides[categoryKey][optionKey][bucket] = value;
+      });
+
+      return {
+        ...prev,
+        llpaOverrides: newOverrides,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    setHasChanges(true);
+    setSaveMessage(`Applied ${value === null ? 'N/A' : value} to entire row`);
+    setTimeout(() => setSaveMessage(''), 2000);
+  };
+
+  // Convert all zeros in current category to N/A
+  const convertZerosToNaInCategory = (categoryKey) => {
+    const category = LLPA_CATEGORIES[categoryKey];
+    if (!category) return;
+
+    let count = 0;
+    setSheet(prev => {
+      const newOverrides = { ...prev.llpaOverrides };
+      if (!newOverrides[categoryKey]) newOverrides[categoryKey] = {};
+
+      category.options.forEach(option => {
+        if (!newOverrides[categoryKey][option.key]) newOverrides[categoryKey][option.key] = {};
+
+        LTV_BUCKETS.forEach(bucket => {
+          const currentValue = getEffectiveLlpaValue(categoryKey, option.key, bucket);
+          if (currentValue === 0) {
+            newOverrides[categoryKey][option.key][bucket] = null;
+            count++;
+          }
+        });
+      });
+
+      return {
+        ...prev,
+        llpaOverrides: newOverrides,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    setHasChanges(true);
+    setSaveMessage(`Converted ${count} zero values to N/A`);
+    setTimeout(() => setSaveMessage(''), 3000);
+  };
+
   // Get effective LLPA value
   const getEffectiveLlpaValue = (categoryKey, optionKey, bucket) => {
     const override = sheet.llpaOverrides?.[categoryKey]?.[optionKey]?.[bucket];
@@ -504,11 +560,23 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
             {/* LLPA Grid */}
             <div className="flex-1 min-w-0">
               <div className="bg-white rounded-xl border border-[#E4E4E7] overflow-hidden">
-                <div className="px-4 py-3 border-b border-[#E4E4E7] bg-[#FAFAFA]">
-                  <h2 className="font-semibold text-[#09090B]">{currentCategory?.label}</h2>
-                  <p className="text-xs text-[#71717A]">
-                    Click N/A cells to enable them. Click enabled cells and set to "null" to disable.
-                  </p>
+                <div className="px-4 py-3 border-b border-[#E4E4E7] bg-[#FAFAFA] flex items-center justify-between">
+                  <div>
+                    <h2 className="font-semibold text-[#09090B]">{currentCategory?.label}</h2>
+                    <p className="text-xs text-[#71717A]">
+                      Click N/A cells to enable them. Click enabled cells and set to "null" to disable.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => convertZerosToNaInCategory(activeLlpaCategory)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-[#18181B] hover:bg-[#27272A] text-white text-sm font-medium rounded-lg transition-colors"
+                    title="Convert all 0.000 values in this category to N/A"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    0 → N/A
+                  </button>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -523,6 +591,9 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                             {bucket}%
                           </th>
                         ))}
+                        <th className="px-2 py-3 text-xs font-semibold text-[#71717A] text-center min-w-[100px] sticky right-0 bg-[#F4F4F5] z-10">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -550,6 +621,28 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                               </td>
                             );
                           })}
+                          {/* Row Actions */}
+                          <td className={`px-2 py-1 text-center sticky right-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-[#FAFAFA]'} z-10 border-l border-[#E4E4E7]`}>
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => {
+                                  const firstValue = getEffectiveLlpaValue(activeLlpaCategory, option.key, LTV_BUCKETS[0]);
+                                  applyToEntireRow(activeLlpaCategory, option.key, firstValue);
+                                }}
+                                className="px-2 py-1 text-[10px] font-medium bg-[#007FFF] hover:bg-[#0066CC] text-white rounded transition-colors whitespace-nowrap"
+                                title="Apply first cell value to entire row"
+                              >
+                                Apply to Row
+                              </button>
+                              <button
+                                onClick={() => applyToEntireRow(activeLlpaCategory, option.key, null)}
+                                className="px-2 py-1 text-[10px] font-medium bg-[#71717A] hover:bg-[#52525B] text-white rounded transition-colors whitespace-nowrap"
+                                title="Set entire row to N/A"
+                              >
+                                All N/A
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
