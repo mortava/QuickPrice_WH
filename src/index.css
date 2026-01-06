@@ -250,3 +250,110 @@ input[type="number"] {
   background-color: var(--muted);
   color: var(--muted-foreground);
 }
+
+/* Print Styles for PDF Export */
+@media print {
+  /* Hide non-printable elements */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .hidden.print\\:block {
+    display: block !important;
+  }
+
+  /* Force details open for print */
+  details.print\\:open,
+  details.print\\:open[open] {
+    display: block;
+  }
+
+  details.print\\:open > summary {
+    list-style: none;
+  }
+
+  details.print\\:open > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Page setup */
+  @page {
+    size: letter portrait;
+    margin: 0.5in;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+  }
+
+  /* Ensure colors print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide header, footer, bottom bar */
+  header,
+  .safe-area-pb,
+  .lg\\:hidden.fixed {
+    display: none !important;
+  }
+
+  /* Reset main content for print */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* Hide the input form grid when printing */
+  main > .grid {
+    display: none !important;
+  }
+
+  /* Ensure results display properly */
+  .print\\:mt-0 {
+    margin-top: 0 !important;
+  }
+
+  .print\\:animate-none {
+    animation: none !important;
+  }
+
+  .print\\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .print\\:border-2 {
+    border-width: 2px !important;
+  }
+
+  .print\\:bg-\\[\\#09090B\\] {
+    background-color: #09090B !important;
+  }
+
+  .print\\:bg-\\[\\#F4F4F5\\] {
+    background-color: #F4F4F5 !important;
+  }
+
+  .print\\:py-4 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .print\\:cursor-default {
+    cursor: default !important;
+  }
+
+  /* Avoid page breaks inside cards */
+  .bg-white.rounded-xl {
+    page-break-inside: avoid;
+  }
+
+  /* Keep rate rows together */
+  .space-y-2 > div {
+    page-break-inside: avoid;
+  }
+}

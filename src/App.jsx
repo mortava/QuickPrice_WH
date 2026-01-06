@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PillGroup, SmartToggle, RateResults } from './components';
+import { PillGroup, SmartToggle, RateResultsDisplay } from './components';
 import { DefyPricingLogic } from './logic/DefyPricingLogic';
 import { PricingEngine } from './logic/PricingEngine';
 
@@ -551,6 +551,13 @@ export default function App({ onAdminClick }) {
             </div>
           </div>
         </div>
+
+        {/* Inline Rate Results Display */}
+        <RateResultsDisplay
+          results={rateResults}
+          formData={formData}
+          onClear={() => setRateResults(null)}
+        />
       </main>
 
       {/* Fixed Bottom Button - Mobile Only */}
@@ -574,13 +581,6 @@ export default function App({ onAdminClick }) {
         </button>
       </div>
 
-      {/* Rate Results Modal */}
-      {rateResults && (
-        <RateResults
-          results={rateResults}
-          onClose={() => setRateResults(null)}
-        />
-      )}
     </div>
   );
 }
