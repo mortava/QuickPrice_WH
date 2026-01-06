@@ -6,6 +6,8 @@
 import { useState, useRef } from 'react';
 import { LTV_BUCKETS, LLPA_CATEGORIES } from '../data/llpaConfig';
 import { PROGRAM_TYPES, ALL_STATES, ALL_DOC_TYPES, ALL_PROPERTY_TYPES, generateExportTemplate } from '../data/rateSheetStorage';
+import { parsePdfRateSheet } from '../utils/pdfParser';
+import { LlpaInput } from './LlpaInput';
 
 export function RateSheetEditor({ rateSheet, onSave, onBack }) {
   const [sheet, setSheet] = useState({ ...rateSheet });
@@ -141,9 +143,48 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
       };
       reader.readAsText(file);
     } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
-      alert('Excel/CSV import coming soon. For now, please export from Excel to JSON format.');
+      alert('Excel/CSV import: Please export your spreadsheet data to JSON format.\n\nUse the "Export JSON" button to see the expected format.');
     } else if (ext === 'pdf') {
-      alert('PDF import requires OCR processing. Please extract data to JSON format first.');
+      // PDF OCR Import
+      setSaveMessage('Parsing PDF with OCR...');
+      try {
+        const result = await parsePdfRateSheet(file);
+        if (result.success) {
+          const parsed = result.data;
+
+          // Update sheet with parsed data
+          setSheet(prev => ({
+            ...prev,
+            name: parsed.programName || prev.name,
+            programType: parsed.programType || prev.programType,
+            baseRates: parsed.baseRates.length > 0 ? parsed.baseRates : prev.baseRates,
+            settings: {
+              ...prev.settings,
+              minFico: parsed.settings?.minFico || prev.settings?.minFico,
+              maxLTV: parsed.settings?.maxLTV || prev.settings?.maxLTV,
+              minLoanAmount: parsed.settings?.minLoanAmount || prev.settings?.minLoanAmount,
+              maxLoanAmount: parsed.settings?.maxLoanAmount || prev.settings?.maxLoanAmount,
+            },
+            updatedAt: new Date().toISOString()
+          }));
+          setHasChanges(true);
+
+          // Show warnings if any
+          if (parsed.parseWarnings && parsed.parseWarnings.length > 0) {
+            setSaveMessage(`PDF imported with ${parsed.parseWarnings.length} warning(s). Review data.`);
+            console.log('PDF Parse Warnings:', parsed.parseWarnings);
+          } else {
+            setSaveMessage(`PDF imported! Found ${parsed.baseRates.length} rates. Review and save.`);
+          }
+        } else {
+          alert(`PDF parsing failed: ${result.error}\n\nPlease try a different PDF or manually enter the data.`);
+          setSaveMessage('');
+        }
+      } catch (err) {
+        console.error('PDF import error:', err);
+        alert('Failed to parse PDF file. Please check the file and try again.');
+        setSaveMessage('');
+      }
     }
 
     e.target.value = '';
@@ -499,33 +540,13 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                           </td>
                           {LTV_BUCKETS.map(bucket => {
                             const value = getEffectiveLlpaValue(activeLlpaCategory, option.key, bucket);
-                            const isNull = value === null;
 
                             return (
                               <td key={bucket} className="px-1 py-1 text-center">
-                                {isNull ? (
-                                  <button
-                                    onClick={() => toggleNaOverride(activeLlpaCategory, option.key, bucket, value)}
-                                    className="w-full h-8 bg-[#18181B] hover:bg-[#27272A] rounded flex items-center justify-center group transition-colors"
-                                    title="Click to enable this option"
-                                  >
-                                    <span className="text-[10px] text-[#71717A] group-hover:text-white font-medium">N/A</span>
-                                  </button>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    step="0.001"
-                                    value={value}
-                                    onChange={(e) => updateLlpaValue(activeLlpaCategory, option.key, bucket, e.target.value)}
-                                    className={`
-                                      w-full h-8 px-1 text-center text-sm font-mono rounded border transition-colors
-                                      ${value > 0 ? 'bg-[#DCFCE7] border-[#86EFAC] text-[#166534]' :
-                                        value < 0 ? 'bg-[#FEE2E2] border-[#FECACA] text-[#991B1B]' :
-                                        'bg-white border-[#E4E4E7] text-[#71717A]'}
-                                      focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent
-                                    `}
-                                  />
-                                )}
+                                <LlpaInput
+                                  value={value}
+                                  onChange={(newValue) => updateLlpaValue(activeLlpaCategory, option.key, bucket, newValue === null ? 'null' : newValue)}
+                                />
                               </td>
                             );
                           })}
@@ -548,8 +569,20 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-[#18181B] rounded" />
-                  <span>N/A (Click to enable)</span>
+                  <span>N/A (Type "NA" or "NULL" to disable)</span>
                 </div>
+              </div>
+
+              {/* Help Text */}
+              <div className="mt-4 p-4 bg-[#F4F4F5] rounded-lg">
+                <h3 className="text-sm font-semibold text-[#09090B] mb-2">How to Edit LLPA Values</h3>
+                <ul className="text-xs text-[#71717A] space-y-1">
+                  <li>- Click any cell to edit the value</li>
+                  <li>- Enter decimal values (e.g., -0.250 for -0.25% cost)</li>
+                  <li>- Type <strong>NA</strong>, <strong>N/A</strong>, or <strong>NULL</strong> to mark as not available</li>
+                  <li>- Press Enter to confirm, Escape to cancel</li>
+                  <li>- Positive = Rebate (green), Negative = Cost (red)</li>
+                </ul>
               </div>
             </div>
           </div>
