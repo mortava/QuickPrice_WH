@@ -154,10 +154,6 @@ export function RateResultsDisplay({ results, formData, onClear }) {
             </summary>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 mt-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-[#71717A]">Program</span>
-                <span className="font-medium text-[#09090B]">{program}</span>
-              </div>
-              <div className="flex justify-between">
                 <span className="text-[#71717A]">Doc Type</span>
                 <span className="font-medium text-[#09090B]">{formData.docType}</span>
               </div>

@@ -13,12 +13,13 @@ import { LTV_BUCKETS, LLPA_CATEGORIES } from '../data/llpaConfig';
 // Local storage key for LLPA data (legacy)
 const LLPA_STORAGE_KEY = 'quickprice_llpa_data';
 
-export function AdminPanel({ onBack }) {
+export function AdminPanel({ onBack, onPushUpdates }) {
   const { logout } = useAdmin();
   const [view, setView] = useState('storage'); // 'storage', 'editor', 'llpa'
   const [rateSheets, setRateSheets] = useState([]);
   const [selectedSheet, setSelectedSheet] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
 
   // Legacy LLPA state (for backwards compatibility)
   const [activeCategory, setActiveCategory] = useState('ficoScore');
@@ -82,6 +83,15 @@ export function AdminPanel({ onBack }) {
       updatedAt: new Date().toISOString()
     };
     handleAddSheet(newSheet);
+  };
+
+  // Handle push updates to application
+  const handlePushUpdates = () => {
+    if (onPushUpdates) {
+      onPushUpdates();
+    }
+    setPushMessage('Updates pushed to pricing engine!');
+    setTimeout(() => setPushMessage(''), 3000);
   };
 
   // Handle file import
@@ -293,6 +303,21 @@ export function AdminPanel({ onBack }) {
 
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-[#E4E4E7] space-y-2">
+          {/* Push Updates Button */}
+          <button
+            onClick={handlePushUpdates}
+            className="w-full px-3 py-2.5 bg-[#10B981] hover:bg-[#059669] text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Push Updates to App
+          </button>
+
+          {pushMessage && (
+            <p className="text-xs text-center text-[#10B981] font-medium animate-fade-in">{pushMessage}</p>
+          )}
+
           <button
             onClick={onBack}
             className="w-full text-left px-3 py-2 text-sm text-[#71717A] hover:text-[#09090B] hover:bg-[#F4F4F5] rounded-lg transition-colors flex items-center gap-2"

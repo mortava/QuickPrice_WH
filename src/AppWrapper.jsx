@@ -5,6 +5,7 @@ import App from './App';
 
 function AppContent() {
   const [view, setView] = useState('pricer'); // 'pricer', 'admin-login', 'admin'
+  const [refreshKey, setRefreshKey] = useState(0);
   const { isAuthenticated, isLoading } = useAdmin();
 
   // Handle view changes
@@ -18,6 +19,12 @@ function AppContent() {
 
   const goToPricer = () => {
     setView('pricer');
+  };
+
+  // Push updates to refresh the pricing engine
+  const handlePushUpdates = () => {
+    setRefreshKey(prev => prev + 1);
+    return true;
   };
 
   // Auto-redirect to admin panel if already authenticated
@@ -38,9 +45,13 @@ function AppContent() {
     case 'admin-login':
       return <AdminLogin onBack={goToPricer} />;
     case 'admin':
-      return isAuthenticated ? <AdminPanel onBack={goToPricer} /> : <AdminLogin onBack={goToPricer} />;
+      return isAuthenticated ? (
+        <AdminPanel onBack={goToPricer} onPushUpdates={handlePushUpdates} />
+      ) : (
+        <AdminLogin onBack={goToPricer} />
+      );
     default:
-      return <App onAdminClick={goToAdmin} />;
+      return <App key={refreshKey} onAdminClick={goToAdmin} />;
   }
 }
 
