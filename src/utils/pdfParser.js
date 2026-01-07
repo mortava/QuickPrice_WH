@@ -1,13 +1,12 @@
 /**
  * PDF Parser Utility for Rate Sheet Import
- * Uses PDF.js to extract text and parse rate sheet data
+ * Uses PDF.js v4.x to extract text and parse rate sheet data
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker - disable worker for simpler setup
-// This runs PDF parsing in the main thread but avoids worker loading issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+// Configure PDF.js worker - use CDN for v4.x
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
 
 /**
  * Extract all text content from a PDF file
@@ -18,12 +17,9 @@ export async function extractTextFromPdf(file) {
   try {
     const arrayBuffer = await file.arrayBuffer();
 
-    // Load PDF with worker disabled for compatibility
+    // Load PDF document
     const loadingTask = pdfjsLib.getDocument({
-      data: arrayBuffer,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
+      data: new Uint8Array(arrayBuffer),
     });
 
     const pdf = await loadingTask.promise;
@@ -32,7 +28,10 @@ export async function extractTextFromPdf(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => item.str).join(' ');
+      const pageText = textContent.items
+        .filter(item => item.str)
+        .map(item => item.str)
+        .join(' ');
       fullText += pageText + '\n\n';
     }
 
@@ -142,7 +141,6 @@ export function parseRateSheetFromText(text) {
   }
 
   // Try to extract LLPA values from tables
-  // Look for patterns like "720-739 -0.250" or FICO score adjustments
   const llpaPatterns = [
     // FICO score adjustments
     {
