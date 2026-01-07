@@ -28,21 +28,30 @@ export class PricingEngine {
    * Determine the program based on input parameters
    */
   static selectProgram(input) {
-    const { docType, occupancy, loanAmount } = input;
-
+    const { docType, loanAmount } = input;
+    const activeSheets = getActiveRateSheets();
+    const keyToSheetId = {
+      'NonQM-C': 'defy-nonqm-c',
+      'NonQM-A': 'defy-nonqm-a',
+      'DSCR-C': 'defy-dscr-c',
+      'DSCR-A': 'defy-dscr-a'
+    };
+    const isActive = (programKey) => {
+      const sheetId = keyToSheetId[programKey];
+      return activeSheets.some(s => s.id === sheetId);
+    };
     // DSCR programs
     if (docType === 'DSCR') {
-      if (loanAmount >= 250000) {
-        return 'DSCR-A';
-      }
-      return 'DSCR-C';
+      if (loanAmount >= 250000 && isActive('DSCR-A')) return 'DSCR-A';
+      if (isActive('DSCR-C')) return 'DSCR-C';
+      if (isActive('DSCR-A')) return 'DSCR-A';
+      return null;
     }
-
     // NonQM programs
-    if (loanAmount >= 1000000) {
-      return 'NonQM-A';
-    }
-    return 'NonQM-C';
+    if (loanAmount >= 1000000 && isActive('NonQM-A')) return 'NonQM-A';
+    if (isActive('NonQM-C')) return 'NonQM-C';
+    if (isActive('NonQM-A')) return 'NonQM-A';
+    return null;
   }
 
   /**
@@ -393,6 +402,12 @@ export class PricingEngine {
   static calculateRates(input) {
     const ltv = (input.loanAmount / input.purchasePrice) * 100;
     const programKey = this.selectProgram(input);
+
+    // Handle case when no active program is found
+    if (!programKey) {
+      return { error: 'No active program available for this loan type', rates: [] };
+    }
+
     const program = PROGRAMS[programKey];
 
     if (!program) {
