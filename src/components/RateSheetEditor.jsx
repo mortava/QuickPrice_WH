@@ -208,29 +208,53 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
         if (result.success) {
           const parsed = result.data;
 
-          // Update sheet with parsed data
-          setSheet(prev => ({
-            ...prev,
-            name: parsed.programName || prev.name,
-            programType: parsed.programType || prev.programType,
-            baseRates: parsed.baseRates.length > 0 ? parsed.baseRates : prev.baseRates,
-            settings: {
-              ...prev.settings,
-              minFico: parsed.settings?.minFico || prev.settings?.minFico,
-              maxLTV: parsed.settings?.maxLTV || prev.settings?.maxLTV,
-              minLoanAmount: parsed.settings?.minLoanAmount || prev.settings?.minLoanAmount,
-              maxLoanAmount: parsed.settings?.maxLoanAmount || prev.settings?.maxLoanAmount,
-            },
-            updatedAt: new Date().toISOString()
-          }));
+          // Count extracted LLPA values
+          let llpaCount = 0;
+          for (const cat of Object.values(parsed.llpaData || {})) {
+            for (const opt of Object.values(cat)) {
+              llpaCount += Object.keys(opt).length;
+            }
+          }
+
+          // Update sheet with parsed data including LLPA
+          setSheet(prev => {
+            // Merge LLPA overrides from PDF with existing
+            const mergedLlpaOverrides = { ...prev.llpaOverrides };
+            if (parsed.llpaData && Object.keys(parsed.llpaData).length > 0) {
+              for (const [catKey, catData] of Object.entries(parsed.llpaData)) {
+                if (!mergedLlpaOverrides[catKey]) mergedLlpaOverrides[catKey] = {};
+                for (const [optKey, optData] of Object.entries(catData)) {
+                  if (!mergedLlpaOverrides[catKey][optKey]) mergedLlpaOverrides[catKey][optKey] = {};
+                  Object.assign(mergedLlpaOverrides[catKey][optKey], optData);
+                }
+              }
+            }
+
+            return {
+              ...prev,
+              name: parsed.programName || prev.name,
+              programType: parsed.programType || prev.programType,
+              baseRates: parsed.baseRates.length > 0 ? parsed.baseRates : prev.baseRates,
+              llpaOverrides: mergedLlpaOverrides,
+              settings: {
+                ...prev.settings,
+                minFico: parsed.settings?.minFico || prev.settings?.minFico,
+                maxLTV: parsed.settings?.maxLTV || prev.settings?.maxLTV,
+                minLoanAmount: parsed.settings?.minLoanAmount || prev.settings?.minLoanAmount,
+                maxLoanAmount: parsed.settings?.maxLoanAmount || prev.settings?.maxLoanAmount,
+              },
+              updatedAt: new Date().toISOString()
+            };
+          });
           setHasChanges(true);
 
-          // Show warnings if any
+          // Show import summary
+          const rateCount = parsed.baseRates.length;
           if (parsed.parseWarnings && parsed.parseWarnings.length > 0) {
-            setSaveMessage(`PDF imported with ${parsed.parseWarnings.length} warning(s). Review data.`);
+            setSaveMessage(`PDF imported! ${rateCount} rates, ${llpaCount} LLPA values. Check LLPA Grid tab.`);
             console.log('PDF Parse Warnings:', parsed.parseWarnings);
           } else {
-            setSaveMessage(`PDF imported! Found ${parsed.baseRates.length} rates. Review and save.`);
+            setSaveMessage(`PDF imported! ${rateCount} rates, ${llpaCount} LLPA values. Review and save.`);
           }
         } else {
           alert(`PDF parsing failed: ${result.error}\n\nPlease try a different PDF or manually enter the data.`);
