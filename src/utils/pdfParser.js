@@ -17,8 +17,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 export async function extractTextFromPdf(file) {
   try {
     const arrayBuffer = await file.arrayBuffer();
-
-    // Load PDF document
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(arrayBuffer),
     });
@@ -44,192 +42,226 @@ export async function extractTextFromPdf(file) {
 }
 
 /**
- * Map common LLPA category names from PDFs to our config keys
+ * Direct mapping of PDF row labels to our LLPA category/option structure
+ * Format: { 'pdf label pattern': { category: 'categoryKey', option: 'optionKey' } }
  */
-const CATEGORY_MAPPINGS = {
-  'fico': 'ficoScore',
-  'fico score': 'ficoScore',
-  'credit score': 'ficoScore',
-  'loan amount': 'loanAmount',
-  'loan size': 'loanAmount',
-  'income doc': 'incomeDocType',
-  'doc type': 'incomeDocType',
-  'documentation': 'incomeDocType',
-  'dti': 'dtiRatio',
-  'debt to income': 'dtiRatio',
-  'product': 'loanProduct',
-  'loan product': 'loanProduct',
-  'amortization': 'loanProduct',
-  'purpose': 'loanPurpose',
-  'loan purpose': 'loanPurpose',
-  'occupancy': 'occupancy',
-  'property type': 'propertyType',
-  'property': 'propertyType',
-  'citizenship': 'citizenship',
-  'residency': 'citizenship',
-  'dscr': 'dscrRange',
-  'dscr range': 'dscrRange',
-  'prepay': 'prepayPeriod',
-  'prepayment': 'prepayPeriod',
-  'lock': 'lockTerm',
-  'lock term': 'lockTerm',
-  'state': 'stateAdjustments',
-  'escrow': 'escrowWaiver',
-  'credit event': 'creditEvent',
-  'bankruptcy': 'creditEvent',
-  'foreclosure': 'creditEvent',
-  'mortgage history': 'mtgHistory',
-  'mortgage late': 'mtgHistory',
-  'first time': 'fthb',
-  'fthb': 'fthb',
-};
+const DIRECT_MAPPINGS = {
+  // FICO Score
+  '≥780': { category: 'ficoScore', option: '≥780' },
+  '>=780': { category: 'ficoScore', option: '≥780' },
+  '780+': { category: 'ficoScore', option: '≥780' },
+  '760-779': { category: 'ficoScore', option: '760-779' },
+  '740-759': { category: 'ficoScore', option: '740-759' },
+  '720-739': { category: 'ficoScore', option: '720-739' },
+  '700-719': { category: 'ficoScore', option: '700-719' },
+  '680-699': { category: 'ficoScore', option: '680-699' },
+  '660-679': { category: 'ficoScore', option: '660-679' },
+  '640-659': { category: 'ficoScore', option: '640-659' },
+  '620-639': { category: 'ficoScore', option: '620-639' },
+  '600-619': { category: 'ficoScore', option: '600-619' },
+  '580-599': { category: 'ficoScore', option: '580-599' },
 
-/**
- * Map option labels from PDFs to our option keys
- */
-const OPTION_MAPPINGS = {
-  // FICO Score mappings
-  '780+': '≥780',
-  '>=780': '≥780',
-  '≥780': '≥780',
-  '760-779': '760-779',
-  '740-759': '740-759',
-  '720-739': '720-739',
-  '700-719': '700-719',
-  '680-699': '680-699',
-  '660-679': '660-679',
-  '640-659': '640-659',
-  '620-639': '620-639',
-  '600-619': '600-619',
-  '580-599': '580-599',
-  // Loan purpose
-  'purchase': 'purchase',
-  'rate/term': 'rate-term',
-  'rate & term': 'rate-term',
-  'r/t': 'rate-term',
-  'cash out': 'cash-out',
-  'cash-out': 'cash-out',
+  // Loan Amount - various formats
+  '≥$150,000 - $300,000': { category: 'loanAmount', option: '$150K-$249K' },
+  '$150,000 - $300,000': { category: 'loanAmount', option: '$150K-$249K' },
+  '$300,001 - $1,000,000': { category: 'loanAmount', option: '$300K-$499K' },
+  '$1,000,001 - $1,500,000': { category: 'loanAmount', option: '$1M-$1.49M' },
+  '$1,500,001 - $2,000,000': { category: 'loanAmount', option: '$1.5M-$1.99M' },
+  '$2,000,001 - $2,500,000': { category: 'loanAmount', option: '$2M-$2.49M' },
+  '$2,500,001 - $3,000,000': { category: 'loanAmount', option: '$2.5M-$2.99M' },
+  '$3,000,001 - $4,000,000': { category: 'loanAmount', option: '$3M-$3.49M' },
+  '$3,000,001 - $3,500,000': { category: 'loanAmount', option: '$3M-$3.49M' },
+  '$3,500,001 - $4,000,000': { category: 'loanAmount', option: '$3.5M-$3.99M' },
+  '$4,000,001 - $4,500,000': { category: 'loanAmount', option: '$4M-$4.49M' },
+  '$4,500,001 - $5,000,000': { category: 'loanAmount', option: '$4.5M-$5M' },
+
+  // Income Doc Type
+  '12m bank stmts': { category: 'incomeDocType', option: '12m-bank' },
+  '12m bank stmt': { category: 'incomeDocType', option: '12m-bank' },
+  '24m bank stmts': { category: 'incomeDocType', option: '24m-bank' },
+  '24m bank stmt': { category: 'incomeDocType', option: '24m-bank' },
+  '1yr 1099 only': { category: 'incomeDocType', option: '1yr-1099' },
+  '1yr 1099': { category: 'incomeDocType', option: '1yr-1099' },
+  'asset depletion': { category: 'incomeDocType', option: 'asset-depletion' },
+  '1yr p&l w/2m bank stmts': { category: 'incomeDocType', option: '1yr-pl-2m-bank' },
+  '1yr p&l w/2m bank': { category: 'incomeDocType', option: '1yr-pl-2m-bank' },
+  '1yr p&l only': { category: 'incomeDocType', option: '1yr-pl-only' },
+  '1yr wvoe only': { category: 'incomeDocType', option: '1yr-wvoe' },
+  '1yr wvoe': { category: 'incomeDocType', option: '1yr-wvoe' },
+  'dscr': { category: 'incomeDocType', option: 'dscr' },
+  'full doc': { category: 'incomeDocType', option: '2yr-full-doc' },
+  '2yr full doc': { category: 'incomeDocType', option: '2yr-full-doc' },
+  '1yr full doc': { category: 'incomeDocType', option: '1yr-full-doc' },
+
+  // DTI
+  '≥43.01 - 50.00%': { category: 'dtiRatio', option: '43.01-50%' },
+  '43.01 - 50.00%': { category: 'dtiRatio', option: '43.01-50%' },
+  '43.01-50%': { category: 'dtiRatio', option: '43.01-50%' },
+  '≥50.01 - 55.00%': { category: 'dtiRatio', option: '50.01-55%' },
+  '50.01 - 55.00%': { category: 'dtiRatio', option: '50.01-55%' },
+  '50.01-55%': { category: 'dtiRatio', option: '50.01-55%' },
+
+  // Product / Loan Type
+  'interest-only (30yr)': { category: 'loanProduct', option: 'io-30yr' },
+  'interest only (30yr)': { category: 'loanProduct', option: 'io-30yr' },
+  'i/o 30yr': { category: 'loanProduct', option: 'io-30yr' },
+  'interest-only (40yr)': { category: 'loanProduct', option: 'io-40yr' },
+  'interest only (40yr)': { category: 'loanProduct', option: 'io-40yr' },
+  'i/o 40yr': { category: 'loanProduct', option: 'io-40yr' },
+  '40 year fixed': { category: 'loanProduct', option: '40yr-fixed' },
+  '40yr fixed': { category: 'loanProduct', option: '40yr-fixed' },
+  '5/6 arm': { category: 'loanProduct', option: '5-6-arm' },
+  '5/1 arm': { category: 'loanProduct', option: '5-6-arm' },
+  '7/6 arm': { category: 'loanProduct', option: '7-6-arm' },
+  '7/1 arm': { category: 'loanProduct', option: '7-6-arm' },
+  '10/6 arm': { category: 'loanProduct', option: '10-6-arm' },
+
+  // Purpose
+  'cash-out': { category: 'loanPurpose', option: 'cash-out' },
+  'cash out': { category: 'loanPurpose', option: 'cash-out' },
+  'purpose cash-out': { category: 'loanPurpose', option: 'cash-out' },
+  'rate & term': { category: 'loanPurpose', option: 'rate-term' },
+  'rate/term': { category: 'loanPurpose', option: 'rate-term' },
+  'r/t': { category: 'loanPurpose', option: 'rate-term' },
+
   // Occupancy
-  'primary': 'primary',
-  'owner occupied': 'primary',
-  'second home': 'second-home',
-  '2nd home': 'second-home',
-  'investment': 'investor',
-  'investor': 'investor',
-  'non-owner': 'investor',
-  // Property type
-  'sfr': 'sfr',
-  'single family': 'sfr',
-  'condo': 'condo',
-  'townhome': 'pud',
-  'townhouse': 'pud',
-  'pud': 'pud',
-  '2 unit': '2-unit',
-  '2-unit': '2-unit',
-  '3-4 unit': '3-4-unit',
-  '2-4 unit': '2-4-unit',
-  // Doc types
-  'full doc': '2yr-full-doc',
-  '2 year': '2yr-full-doc',
-  '24 month bank': '24m-bank',
-  '12 month bank': '12m-bank',
-  'bank statement': '12m-bank',
-  'dscr': 'dscr',
-  'asset depletion': 'asset-depletion',
-  'asset qual': 'asset-depletion',
-  '1099': '1yr-1099',
-  'p&l': '1yr-pl-only',
-  // Products
-  '30 year': '30yr-fixed',
-  '30yr': '30yr-fixed',
-  '30 fixed': '30yr-fixed',
-  'interest only': 'io-30yr',
-  'i/o': 'io-30yr',
-  'arm': '5-6-arm',
-  '5/1 arm': '5-6-arm',
-  '5/6 arm': '5-6-arm',
-  '7/1 arm': '7-6-arm',
-  '7/6 arm': '7-6-arm',
+  'primary': { category: 'occupancy', option: 'primary' },
+  'owner occupied': { category: 'occupancy', option: 'primary' },
+  'second home': { category: 'occupancy', option: 'second-home' },
+  '2nd home': { category: 'occupancy', option: 'second-home' },
+  'investment': { category: 'occupancy', option: 'investor' },
+  'investor': { category: 'occupancy', option: 'investor' },
+  'non-owner': { category: 'occupancy', option: 'investor' },
+
+  // Property Type
+  'sfr': { category: 'propertyType', option: 'sfr' },
+  'single family': { category: 'propertyType', option: 'sfr' },
+  'condo': { category: 'propertyType', option: 'condo' },
+  'condo (non-warrantable)': { category: 'propertyType', option: 'condo-non-warrant' },
+  'non-warrantable': { category: 'propertyType', option: 'condo-non-warrant' },
+  'condotel': { category: 'propertyType', option: 'condotel' },
+  'townhome': { category: 'propertyType', option: 'pud' },
+  'townhouse': { category: 'propertyType', option: 'pud' },
+  'pud': { category: 'propertyType', option: 'pud' },
+  '2 unit': { category: 'propertyType', option: '2-unit' },
+  '2-unit': { category: 'propertyType', option: '2-unit' },
+  '2 - 4 unit': { category: 'propertyType', option: '2-4-unit' },
+  '2-4 unit': { category: 'propertyType', option: '2-4-unit' },
+  '3-4 unit': { category: 'propertyType', option: '3-4-unit' },
+
+  // Rural
+  'rural yes': { category: 'ruralProperty', option: 'yes' },
+  'rural': { category: 'ruralProperty', option: 'yes' },
+
+  // Citizenship
+  'non-perm resident': { category: 'citizenship', option: 'non-perm' },
+  'non perm resident': { category: 'citizenship', option: 'non-perm' },
+  'foreign national': { category: 'citizenship', option: 'foreign-national' },
+  'foreign national/fn': { category: 'citizenship', option: 'foreign-national' },
+  'itin': { category: 'citizenship', option: 'itin' },
+
+  // Credit Event Period
+  '≥48m': { category: 'creditEvent', option: '≥48m-none' },
+  '>=48m': { category: 'creditEvent', option: '≥48m-none' },
+  '48m+': { category: 'creditEvent', option: '≥48m-none' },
+  '36m - 47m': { category: 'creditEvent', option: '36m-47m' },
+  '36m-47m': { category: 'creditEvent', option: '36m-47m' },
+  '24m - 35m': { category: 'creditEvent', option: '24m-35m' },
+  '24m-35m': { category: 'creditEvent', option: '24m-35m' },
+  '12m - 23m': { category: 'creditEvent', option: '12m-23m' },
+  '12m-23m': { category: 'creditEvent', option: '12m-23m' },
+
+  // Mortgage History
+  '0x30x24': { category: 'mtgHistory', option: '0x30x24' },
+  '1x30x12': { category: 'mtgHistory', option: '1x30x12' },
+  '2x30x12': { category: 'mtgHistory', option: '2x30x12' },
+  '3x30x12': { category: 'mtgHistory', option: '3x30x12' },
+  '1x60x12': { category: 'mtgHistory', option: '1x60x12' },
+  '≥1x60x12': { category: 'mtgHistory', option: '≥2x60x12' },
+  '>=1x60x12': { category: 'mtgHistory', option: '≥2x60x12' },
+  '≥2x60x12': { category: 'mtgHistory', option: '≥2x60x12' },
+
+  // Lock Term
+  '15 day': { category: 'lockTerm', option: '15-day' },
+  '15day': { category: 'lockTerm', option: '15-day' },
+  '30 day': { category: 'lockTerm', option: '30-day' },
+  '30day': { category: 'lockTerm', option: '30-day' },
+  '45 day': { category: 'lockTerm', option: '45-day' },
+  '45day': { category: 'lockTerm', option: '45-day' },
+
+  // Escrow Waiver
+  'escrow waiver yes': { category: 'escrowWaiver', option: 'yes' },
+  'waive escrow': { category: 'escrowWaiver', option: 'yes' },
+
+  // DSCR Range
+  '≥1.250': { category: 'dscrRange', option: '≥1.250' },
+  '>=1.250': { category: 'dscrRange', option: '≥1.250' },
+  '1.150-1.249': { category: 'dscrRange', option: '1.150-1.249' },
+  '1.000-1.149': { category: 'dscrRange', option: '1.000-1.149' },
+  '0.750-0.999': { category: 'dscrRange', option: '0.750-0.999' },
+
+  // Prepay
+  '0 - no prepay': { category: 'prepayPeriod', option: '0-no-prepay' },
+  'no prepay': { category: 'prepayPeriod', option: '0-no-prepay' },
+  '1 year': { category: 'prepayPeriod', option: '1yr' },
+  '2 year': { category: 'prepayPeriod', option: '2yr' },
+  '3 year': { category: 'prepayPeriod', option: '3yr' },
+  '4 year': { category: 'prepayPeriod', option: '4yr' },
+  '5 year': { category: 'prepayPeriod', option: '5yr' },
+
+  // FTHB
+  'fthb yes': { category: 'fthb', option: 'yes' },
+  'first time home buyer': { category: 'fthb', option: 'yes' },
 };
 
 /**
- * Parse LLPA values from text - handles various number formats
+ * Parse a value - handles numbers and Null
  */
 function parseValue(str) {
   if (!str) return null;
-  const cleaned = str.replace(/[()%$,]/g, '').trim();
-  if (cleaned.toLowerCase() === 'n/a' || cleaned === '-' || cleaned === '') return null;
-  const num = parseFloat(cleaned);
+  const cleaned = str.trim().toLowerCase();
+  if (cleaned === 'null' || cleaned === 'n/a' || cleaned === '-' || cleaned === '') {
+    return null;
+  }
+  const num = parseFloat(str.replace(/[^\d.-]/g, ''));
   return isNaN(num) ? null : num;
 }
 
 /**
- * Try to find LTV bucket from header text
+ * Try to match a row label to our LLPA structure
  */
-function matchLtvBucket(text) {
-  const cleaned = text.replace(/\s+/g, '').replace(/LTV/gi, '');
+function matchRowLabel(label) {
+  const lower = label.toLowerCase().trim();
 
-  for (const bucket of LTV_BUCKETS) {
-    const bucketClean = bucket.replace(/\s+/g, '');
-    if (cleaned.includes(bucketClean) || bucketClean.includes(cleaned)) {
-      return bucket;
+  // Try direct mapping first
+  for (const [pattern, mapping] of Object.entries(DIRECT_MAPPINGS)) {
+    if (lower === pattern.toLowerCase() || lower.includes(pattern.toLowerCase())) {
+      return mapping;
     }
   }
 
-  // Try numeric matching
-  const numMatch = cleaned.match(/(\d+\.?\d*)/);
-  if (numMatch) {
-    const num = parseFloat(numMatch[1]);
-    if (num <= 50) return '≤50.00';
-    if (num <= 55) return '50.01-55.00';
-    if (num <= 60) return '55.01-60.00';
-    if (num <= 65) return '60.01-65.00';
-    if (num <= 70) return '65.01-70.00';
-    if (num <= 75) return '70.01-75.00';
-    if (num <= 80) return '75.01-80.00';
-    if (num <= 85) return '80.01-85.00';
-    if (num <= 90) return '85.01-90.00';
-  }
+  // Try partial matches for loan amounts with different formats
+  if (lower.includes('$') && (lower.includes('-') || lower.includes('to'))) {
+    // Extract numbers from the string
+    const nums = lower.match(/[\d,]+/g);
+    if (nums && nums.length >= 1) {
+      const firstNum = parseInt(nums[0].replace(/,/g, ''));
 
-  return null;
-}
-
-/**
- * Match category from text
- */
-function matchCategory(text) {
-  const lower = text.toLowerCase().trim();
-  for (const [key, value] of Object.entries(CATEGORY_MAPPINGS)) {
-    if (lower.includes(key)) {
-      return value;
-    }
-  }
-  return null;
-}
-
-/**
- * Match option from text within a category
- */
-function matchOption(text, categoryKey) {
-  const lower = text.toLowerCase().trim();
-  const category = LLPA_CATEGORIES[categoryKey];
-  if (!category) return null;
-
-  // Try direct option key/label match
-  for (const option of category.options) {
-    if (lower.includes(option.key.toLowerCase()) ||
-        lower.includes(option.label.toLowerCase())) {
-      return option.key;
-    }
-  }
-
-  // Try mapped values
-  for (const [key, value] of Object.entries(OPTION_MAPPINGS)) {
-    if (lower.includes(key)) {
-      // Verify this option exists in the category
-      if (category.options.find(o => o.key === value)) {
-        return value;
-      }
+      if (firstNum >= 75000 && firstNum < 100000) return { category: 'loanAmount', option: '$75K-$99K' };
+      if (firstNum >= 100000 && firstNum < 125000) return { category: 'loanAmount', option: '$100K-$124K' };
+      if (firstNum >= 125000 && firstNum < 150000) return { category: 'loanAmount', option: '$125K-$149K' };
+      if (firstNum >= 150000 && firstNum < 250000) return { category: 'loanAmount', option: '$150K-$249K' };
+      if (firstNum >= 250000 && firstNum < 300000) return { category: 'loanAmount', option: '$250K-$299K' };
+      if (firstNum >= 300000 && firstNum < 500000) return { category: 'loanAmount', option: '$300K-$499K' };
+      if (firstNum >= 500000 && firstNum < 1000000) return { category: 'loanAmount', option: '$500K-$999K' };
+      if (firstNum >= 1000000 && firstNum < 1500000) return { category: 'loanAmount', option: '$1M-$1.49M' };
+      if (firstNum >= 1500000 && firstNum < 2000000) return { category: 'loanAmount', option: '$1.5M-$1.99M' };
+      if (firstNum >= 2000000 && firstNum < 2500000) return { category: 'loanAmount', option: '$2M-$2.49M' };
+      if (firstNum >= 2500000 && firstNum < 3000000) return { category: 'loanAmount', option: '$2.5M-$2.99M' };
+      if (firstNum >= 3000000 && firstNum < 3500000) return { category: 'loanAmount', option: '$3M-$3.49M' };
+      if (firstNum >= 3500000 && firstNum < 4000000) return { category: 'loanAmount', option: '$3.5M-$3.99M' };
+      if (firstNum >= 4000000 && firstNum < 4500000) return { category: 'loanAmount', option: '$4M-$4.49M' };
+      if (firstNum >= 4500000) return { category: 'loanAmount', option: '$4.5M-$5M' };
     }
   }
 
@@ -238,71 +270,83 @@ function matchOption(text, categoryKey) {
 
 /**
  * Parse LLPA grid data from extracted PDF text
- * @param {string} text - Extracted PDF text
- * @returns {Object} - LLPA overrides structure
  */
 export function parseLlpaFromText(text) {
   const llpaOverrides = {};
 
-  // Split text into lines for analysis
-  const lines = text.split(/\n/).filter(l => l.trim());
+  // Standard regex to find rows with label followed by 9 numeric values
+  // Pattern: Label followed by numbers (possibly with Null)
+  const rowPattern = /([A-Za-z0-9≥<>$,.\-\/\s&%()]+?)\s+((?:-?\d+\.\d+|Null)\s+){2,}/gi;
 
-  let currentCategory = null;
-  let ltvHeaders = [];
+  let match;
+  while ((match = rowPattern.exec(text)) !== null) {
+    const fullMatch = match[0].trim();
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    // Split into label and values
+    // Find where the numeric values start
+    const valueStart = fullMatch.search(/\s+-?\d+\.\d+|\s+Null/i);
+    if (valueStart === -1) continue;
 
-    // Check if this line contains LTV headers
-    const ltvMatches = line.match(/(\d{2,3}(?:\.\d{1,2})?%?)/g);
-    if (ltvMatches && ltvMatches.length >= 3) {
-      ltvHeaders = ltvMatches.map(m => matchLtvBucket(m)).filter(Boolean);
-      continue;
-    }
+    const label = fullMatch.substring(0, valueStart).trim();
+    const valuesStr = fullMatch.substring(valueStart).trim();
 
-    // Check if this is a category header
-    const categoryMatch = matchCategory(line);
-    if (categoryMatch) {
-      currentCategory = categoryMatch;
-      if (!llpaOverrides[currentCategory]) {
-        llpaOverrides[currentCategory] = {};
+    // Parse the values
+    const valueMatches = valuesStr.match(/-?\d+\.\d+|Null/gi);
+    if (!valueMatches || valueMatches.length < 2) continue;
+
+    // Try to match the label
+    const mapping = matchRowLabel(label);
+    if (!mapping) continue;
+
+    const { category, option } = mapping;
+
+    // Initialize category and option if needed
+    if (!llpaOverrides[category]) llpaOverrides[category] = {};
+    if (!llpaOverrides[category][option]) llpaOverrides[category][option] = {};
+
+    // Map values to LTV buckets
+    valueMatches.forEach((val, idx) => {
+      if (idx < LTV_BUCKETS.length) {
+        const numVal = parseValue(val);
+        llpaOverrides[category][option][LTV_BUCKETS[idx]] = numVal;
       }
-      continue;
-    }
-
-    // Try to parse row data (option + values)
-    if (currentCategory && ltvHeaders.length > 0) {
-      const optionKey = matchOption(line, currentCategory);
-      if (optionKey) {
-        // Extract numeric values from the line
-        const values = line.match(/-?\d+\.?\d*/g);
-        if (values && values.length > 0) {
-          if (!llpaOverrides[currentCategory][optionKey]) {
-            llpaOverrides[currentCategory][optionKey] = {};
-          }
-
-          values.forEach((val, idx) => {
-            if (idx < ltvHeaders.length && ltvHeaders[idx]) {
-              const numVal = parseValue(val);
-              if (numVal !== null) {
-                llpaOverrides[currentCategory][optionKey][ltvHeaders[idx]] = numVal;
-              }
-            }
-          });
-        }
-      }
-    }
+    });
   }
 
-  // Also try pattern-based extraction for common LLPA formats
-  const patternOverrides = extractLlpaPatterns(text);
+  // Also try line-by-line parsing for edge cases
+  const lines = text.split(/\n/);
+  for (const line of lines) {
+    // Skip short lines
+    if (line.length < 20) continue;
 
-  // Merge pattern-based extractions
-  for (const [cat, options] of Object.entries(patternOverrides)) {
-    if (!llpaOverrides[cat]) llpaOverrides[cat] = {};
-    for (const [opt, buckets] of Object.entries(options)) {
-      if (!llpaOverrides[cat][opt]) llpaOverrides[cat][opt] = {};
-      Object.assign(llpaOverrides[cat][opt], buckets);
+    // Look for patterns like "Label  0.000  0.000  -0.250..."
+    const parts = line.trim().split(/\s{2,}/);
+    if (parts.length < 3) continue;
+
+    const label = parts[0];
+    const mapping = matchRowLabel(label);
+    if (!mapping) continue;
+
+    const { category, option } = mapping;
+
+    // Extract numeric values from remaining parts
+    const values = [];
+    for (let i = 1; i < parts.length; i++) {
+      const val = parseValue(parts[i]);
+      if (val !== undefined) {
+        values.push(val);
+      }
+    }
+
+    if (values.length >= 2) {
+      if (!llpaOverrides[category]) llpaOverrides[category] = {};
+      if (!llpaOverrides[category][option]) llpaOverrides[category][option] = {};
+
+      values.forEach((val, idx) => {
+        if (idx < LTV_BUCKETS.length) {
+          llpaOverrides[category][option][LTV_BUCKETS[idx]] = val;
+        }
+      });
     }
   }
 
@@ -310,80 +354,7 @@ export function parseLlpaFromText(text) {
 }
 
 /**
- * Pattern-based LLPA extraction for common rate sheet formats
- */
-function extractLlpaPatterns(text) {
-  const overrides = {};
-
-  // Pattern: "FICO Score" section with rows like "≥780  0.000  0.000  0.125  ..."
-  const ficoPattern = /([≥><]?\d{3}(?:\s*-\s*\d{3})?)\s+((?:-?\d+\.\d{3}\s*)+)/gi;
-  let match;
-  while ((match = ficoPattern.exec(text)) !== null) {
-    const range = match[1].trim();
-    const values = match[2].trim().split(/\s+/).map(v => parseFloat(v));
-
-    // Map to our FICO keys
-    let optionKey = null;
-    if (range.includes('780')) optionKey = '≥780';
-    else if (range.includes('760')) optionKey = '760-779';
-    else if (range.includes('740')) optionKey = '740-759';
-    else if (range.includes('720')) optionKey = '720-739';
-    else if (range.includes('700')) optionKey = '700-719';
-    else if (range.includes('680')) optionKey = '680-699';
-    else if (range.includes('660')) optionKey = '660-679';
-    else if (range.includes('640')) optionKey = '640-659';
-    else if (range.includes('620')) optionKey = '620-639';
-
-    if (optionKey && values.length > 0) {
-      if (!overrides.ficoScore) overrides.ficoScore = {};
-      if (!overrides.ficoScore[optionKey]) overrides.ficoScore[optionKey] = {};
-
-      values.forEach((val, idx) => {
-        if (idx < LTV_BUCKETS.length && !isNaN(val)) {
-          overrides.ficoScore[optionKey][LTV_BUCKETS[idx]] = val;
-        }
-      });
-    }
-  }
-
-  // Pattern: Loan amount ranges like "$100K-$150K  -0.250  0.000  ..."
-  const loanPattern = /\$?(\d+)[kK]?\s*-\s*\$?(\d+)[kK]?\s+((?:-?\d+\.\d{3}\s*)+)/gi;
-  while ((match = loanPattern.exec(text)) !== null) {
-    const lowAmt = parseInt(match[1]) * (match[1].length <= 3 ? 1000 : 1);
-    const values = match[3].trim().split(/\s+/).map(v => parseFloat(v));
-
-    // Map to our loan amount keys
-    let optionKey = null;
-    if (lowAmt >= 75000 && lowAmt < 100000) optionKey = '$75K-$99K';
-    else if (lowAmt >= 100000 && lowAmt < 125000) optionKey = '$100K-$124K';
-    else if (lowAmt >= 125000 && lowAmt < 150000) optionKey = '$125K-$149K';
-    else if (lowAmt >= 150000 && lowAmt < 250000) optionKey = '$150K-$249K';
-    else if (lowAmt >= 250000 && lowAmt < 300000) optionKey = '$250K-$299K';
-    else if (lowAmt >= 300000 && lowAmt < 500000) optionKey = '$300K-$499K';
-    else if (lowAmt >= 500000 && lowAmt < 1000000) optionKey = '$500K-$999K';
-    else if (lowAmt >= 1000000 && lowAmt < 1500000) optionKey = '$1M-$1.49M';
-    else if (lowAmt >= 1500000 && lowAmt < 2000000) optionKey = '$1.5M-$1.99M';
-    else if (lowAmt >= 2000000 && lowAmt < 2500000) optionKey = '$2M-$2.49M';
-
-    if (optionKey && values.length > 0) {
-      if (!overrides.loanAmount) overrides.loanAmount = {};
-      if (!overrides.loanAmount[optionKey]) overrides.loanAmount[optionKey] = {};
-
-      values.forEach((val, idx) => {
-        if (idx < LTV_BUCKETS.length && !isNaN(val)) {
-          overrides.loanAmount[optionKey][LTV_BUCKETS[idx]] = val;
-        }
-      });
-    }
-  }
-
-  return overrides;
-}
-
-/**
  * Parse rate sheet data from extracted PDF text
- * @param {string} text - Extracted PDF text
- * @returns {Object} - Parsed rate sheet data
  */
 export function parseRateSheetFromText(text) {
   const result = {
@@ -401,17 +372,16 @@ export function parseRateSheetFromText(text) {
     parseWarnings: [],
   };
 
-  // Try to extract program name from common patterns
-  const programNamePatterns = [
-    /Program\s*[:\-]?\s*([A-Za-z0-9\s\-\/]+?)(?:\n|$)/i,
-    /Rate\s*Sheet\s*[:\-]?\s*([A-Za-z0-9\s\-\/]+?)(?:\n|$)/i,
-    /(NonQM|DSCR|HELOAN|RTL)[\s\-\/]*([A-Za-z0-9]+)?/i,
+  // Extract program name
+  const programPatterns = [
+    /^(NonQM|DSCR|HELOAN|RTL)[\s\/]*([A-Z])?/im,
+    /Program[:\s]*([A-Za-z0-9\s\-\/]+)/i,
   ];
 
-  for (const pattern of programNamePatterns) {
+  for (const pattern of programPatterns) {
     const match = text.match(pattern);
     if (match) {
-      result.programName = match[1]?.trim() || match[0]?.trim();
+      result.programName = match[0].trim();
       break;
     }
   }
@@ -425,78 +395,58 @@ export function parseRateSheetFromText(text) {
     result.programType = 'RTL';
   }
 
-  // Extract base rates - look for rate/price pairs
-  const ratePatterns = [
-    /(\d{1,2}\.\d{2,3})%?\s+(\d{2,3}\.\d{2,3})/g,
-    /Rate[:\s]*(\d{1,2}\.\d{2,3}).*?Price[:\s]*(\d{2,3}\.\d{2,3})/gi,
-  ];
-
+  // Extract base rates - pattern: "5.750 97.625" or "5.750% 97.625"
+  const ratePattern = /(\d{1,2}\.\d{2,3})%?\s+(\d{2,3}\.\d{2,3})/g;
   const foundRates = new Set();
 
-  for (const pattern of ratePatterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const rate = parseFloat(match[1]);
-      const price = parseFloat(match[2]);
+  let rateMatch;
+  while ((rateMatch = ratePattern.exec(text)) !== null) {
+    const rate = parseFloat(rateMatch[1]);
+    const price = parseFloat(rateMatch[2]);
 
-      if (rate >= 4 && rate <= 15 && price >= 90 && price <= 115) {
-        const key = `${rate.toFixed(3)}-${price.toFixed(3)}`;
-        if (!foundRates.has(key)) {
-          foundRates.add(key);
-          result.baseRates.push({ rate, price });
-        }
+    if (rate >= 4 && rate <= 15 && price >= 90 && price <= 115) {
+      const key = `${rate.toFixed(3)}-${price.toFixed(3)}`;
+      if (!foundRates.has(key)) {
+        foundRates.add(key);
+        result.baseRates.push({ rate, price });
       }
     }
   }
 
   result.baseRates.sort((a, b) => a.rate - b.rate);
 
-  // Extract FICO requirements
+  // Extract settings
   const ficoMatch = text.match(/Min(?:imum)?\s*FICO[:\s]*(\d{3})/i);
-  if (ficoMatch) {
-    result.settings.minFico = parseInt(ficoMatch[1]);
-  }
+  if (ficoMatch) result.settings.minFico = parseInt(ficoMatch[1]);
 
-  // Extract Max LTV
   const ltvMatch = text.match(/Max(?:imum)?\s*LTV[:\s]*(\d{2,3})%?/i);
-  if (ltvMatch) {
-    result.settings.maxLTV = parseInt(ltvMatch[1]);
-  }
+  if (ltvMatch) result.settings.maxLTV = parseInt(ltvMatch[1]);
 
-  // Extract loan amount limits
-  const minLoanMatch = text.match(/Min(?:imum)?\s*(?:Loan\s*)?Amount[:\s]*\$?([\d,]+)/i);
-  if (minLoanMatch) {
-    result.settings.minLoanAmount = parseInt(minLoanMatch[1].replace(/,/g, ''));
-  }
-
-  const maxLoanMatch = text.match(/Max(?:imum)?\s*(?:Loan\s*)?Amount[:\s]*\$?([\d,]+)/i);
-  if (maxLoanMatch) {
-    result.settings.maxLoanAmount = parseInt(maxLoanMatch[1].replace(/,/g, ''));
-  }
-
-  // Parse LLPA grid data
+  // Parse LLPA grid
   result.llpaData = parseLlpaFromText(text);
 
-  // Count extracted LLPA entries
+  // Count LLPA entries
   let llpaCount = 0;
-  for (const cat of Object.values(result.llpaData)) {
-    for (const opt of Object.values(cat)) {
+  let categoryCount = 0;
+  for (const [cat, options] of Object.entries(result.llpaData)) {
+    categoryCount++;
+    for (const opt of Object.values(options)) {
       llpaCount += Object.keys(opt).length;
     }
   }
 
-  // Add warnings if parsing was incomplete
+  // Warnings
   if (result.baseRates.length === 0) {
-    result.parseWarnings.push('Could not extract base rates from PDF. Please enter manually.');
+    result.parseWarnings.push('Could not extract base rates. Enter manually.');
   }
   if (!result.programName) {
-    result.parseWarnings.push('Could not detect program name. Please enter manually.');
     result.programName = 'Imported Rate Sheet';
+    result.parseWarnings.push('Could not detect program name.');
   }
   if (llpaCount === 0) {
-    result.parseWarnings.push('Could not extract LLPA adjustments. Please enter manually in the LLPA Grid tab.');
+    result.parseWarnings.push('Could not extract LLPA adjustments. Enter manually in LLPA Grid tab.');
   } else {
-    result.parseWarnings.push(`Extracted ${llpaCount} LLPA adjustment values. Please review in the LLPA Grid tab.`);
+    result.parseWarnings.push(`Extracted ${llpaCount} LLPA values across ${categoryCount} categories.`);
   }
 
   return result;
@@ -504,8 +454,6 @@ export function parseRateSheetFromText(text) {
 
 /**
  * Parse a PDF file and return structured rate sheet data
- * @param {File} file - The PDF file to parse
- * @returns {Promise<Object>} - Parsed rate sheet data
  */
 export async function parsePdfRateSheet(file) {
   try {
@@ -526,8 +474,6 @@ export async function parsePdfRateSheet(file) {
 
 /**
  * Convert parsed PDF data to rate sheet format
- * @param {Object} parsedData - Data from parsePdfRateSheet
- * @returns {Object} - Rate sheet object ready for storage
  */
 export function convertToRateSheet(parsedData) {
   const id = 'imported-' + Date.now();
