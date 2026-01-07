@@ -4,6 +4,20 @@
  */
 
 import { BASE_RATES, PROGRAMS, LLPA_NONQM_C, LLPA_DSCR_C } from '../data/rateSheets';
+import { loadRateSheets, DEFAULT_MARGIN_HOLDBACK } from '../data/rateSheetStorage';
+
+/**
+ * Get active rate sheets from localStorage
+ */
+function getActiveRateSheets() {
+  try {
+    const sheets = loadRateSheets();
+    return sheets.filter(s => s.isActive !== false);
+  } catch (e) {
+    console.error('Failed to load rate sheets:', e);
+    return [];
+  }
+}
 
 // Hidden margin deduction applied to all programs (not shown to client)
 const MARGIN_DEDUCTION = -1.625;
