@@ -6,7 +6,7 @@
 import { useState, useRef } from 'react';
 import { LTV_BUCKETS, LLPA_CATEGORIES } from '../data/llpaConfig';
 import { PROGRAM_TYPES, ALL_STATES, ALL_DOC_TYPES, ALL_PROPERTY_TYPES, generateExportTemplate } from '../data/rateSheetStorage';
-import { parsePdfRateSheet } from '../utils/pdfParser';
+import { parsePdfRateSheet, parseLlpaOnlyFromPdf, parseBaseRatesOnlyFromPdf } from '../utils/pdfParser';
 import { LlpaInput } from './LlpaInput';
 
 export function RateSheetEditor({ rateSheet, onSave, onBack }) {
@@ -16,6 +16,8 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
   const [hasChanges, setHasChanges] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const fileInputRef = useRef(null);
+  const llpaImportRef = useRef(null);
+  const ratesImportRef = useRef(null);
 
   // Update sheet data
   const updateSheet = (updates) => {
@@ -270,6 +272,107 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
     e.target.value = '';
   };
 
+  // Handle LLPA-only PDF import
+  const handleLlpaImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'pdf') {
+      alert('Please select a PDF file for LLPA import.');
+      e.target.value = '';
+      return;
+    }
+
+    setSaveMessage('Parsing LLPA data from PDF...');
+    try {
+      const result = await parseLlpaOnlyFromPdf(file);
+      if (result.success) {
+        const { llpaData, stats } = result.data;
+
+        // Merge LLPA overrides from PDF with existing
+        setSheet(prev => {
+          const mergedLlpaOverrides = { ...prev.llpaOverrides };
+          for (const [catKey, catData] of Object.entries(llpaData)) {
+            if (!mergedLlpaOverrides[catKey]) mergedLlpaOverrides[catKey] = {};
+            for (const [optKey, optData] of Object.entries(catData)) {
+              if (!mergedLlpaOverrides[catKey][optKey]) mergedLlpaOverrides[catKey][optKey] = {};
+              Object.assign(mergedLlpaOverrides[catKey][optKey], optData);
+            }
+          }
+
+          return {
+            ...prev,
+            llpaOverrides: mergedLlpaOverrides,
+            updatedAt: new Date().toISOString()
+          };
+        });
+        setHasChanges(true);
+        setSaveMessage(`LLPA imported! ${stats.totalValues} values across ${stats.categories} categories.`);
+      } else {
+        alert(`LLPA import failed: ${result.error}`);
+        setSaveMessage('');
+      }
+    } catch (err) {
+      console.error('LLPA import error:', err);
+      alert('Failed to parse LLPA data from PDF.');
+      setSaveMessage('');
+    }
+    e.target.value = '';
+  };
+
+  // Handle Base Rates-only PDF import
+  const handleRatesImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'pdf') {
+      alert('Please select a PDF file for rates import.');
+      e.target.value = '';
+      return;
+    }
+
+    setSaveMessage('Parsing base rates from PDF...');
+    try {
+      const result = await parseBaseRatesOnlyFromPdf(file);
+      if (result.success) {
+        const parsed = result.data;
+
+        setSheet(prev => ({
+          ...prev,
+          name: parsed.programName || prev.name,
+          programType: parsed.programType || prev.programType,
+          baseRates: parsed.baseRates.length > 0 ? parsed.baseRates : prev.baseRates,
+          settings: {
+            ...prev.settings,
+            minFico: parsed.settings?.minFico || prev.settings?.minFico,
+            maxLTV: parsed.settings?.maxLTV || prev.settings?.maxLTV,
+            minLoanAmount: parsed.settings?.minLoanAmount || prev.settings?.minLoanAmount,
+            maxLoanAmount: parsed.settings?.maxLoanAmount || prev.settings?.maxLoanAmount,
+          },
+          updatedAt: new Date().toISOString()
+        }));
+        setHasChanges(true);
+
+        const rateCount = parsed.baseRates.length;
+        if (rateCount > 0) {
+          setSaveMessage(`Base rates imported! ${rateCount} rate tiers extracted.`);
+        } else {
+          setSaveMessage('No base rates found in PDF. Enter manually.');
+        }
+      } else {
+        alert(`Rates import failed: ${result.error}`);
+        setSaveMessage('');
+      }
+    } catch (err) {
+      console.error('Rates import error:', err);
+      alert('Failed to parse base rates from PDF.');
+      setSaveMessage('');
+    }
+    e.target.value = '';
+  };
+
   const currentCategory = LLPA_CATEGORIES[activeLlpaCategory];
 
   return (
@@ -308,6 +411,20 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
             type="file"
             accept=".json,.pdf,.xlsx,.xls,.csv"
             onChange={handleFileImport}
+            className="hidden"
+          />
+          <input
+            ref={llpaImportRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleLlpaImport}
+            className="hidden"
+          />
+          <input
+            ref={ratesImportRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleRatesImport}
             className="hidden"
           />
           <button
@@ -544,9 +661,36 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
 
               {(!sheet.baseRates || sheet.baseRates.length === 0) && (
                 <div className="p-8 text-center">
-                  <p className="text-[#71717A]">No base rates defined. Click "Add Rate" to start.</p>
+                  <p className="text-[#71717A]">No base rates defined. Click "Add Rate" or import from PDF.</p>
                 </div>
               )}
+            </div>
+
+            {/* OCR Import for Base Rates */}
+            <div className="mt-6 bg-gradient-to-br from-[#007FFF]/5 to-[#007FFF]/10 rounded-xl border-2 border-dashed border-[#007FFF]/30 p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-[#007FFF] rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-[#09090B] mb-1">Import Base Rates from PDF</h3>
+                  <p className="text-sm text-[#71717A] mb-4">
+                    Upload a rate sheet PDF to automatically extract base rates and pricing data using OCR.
+                    Supports most investor rate sheet formats.
+                  </p>
+                  <button
+                    onClick={() => ratesImportRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#007FFF] hover:bg-[#0066CC] text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Select PDF to Import Rates
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -700,6 +844,33 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                   <li>- Press Enter to confirm, Escape to cancel</li>
                   <li>- Positive = Rebate (green), Negative = Cost (red)</li>
                 </ul>
+              </div>
+
+              {/* OCR Import for LLPA */}
+              <div className="mt-6 bg-gradient-to-br from-[#10B981]/5 to-[#10B981]/10 rounded-xl border-2 border-dashed border-[#10B981]/30 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-[#10B981] rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-[#09090B] mb-1">Import LLPA Grid from PDF</h3>
+                    <p className="text-sm text-[#71717A] mb-4">
+                      Upload an LLPA adjustment PDF to automatically extract all pricing adjustments using OCR.
+                      Supports FICO grids, LTV adjustments, loan amount tiers, and more.
+                    </p>
+                    <button
+                      onClick={() => llpaImportRef.current?.click()}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#10B981] hover:bg-[#059669] text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Select PDF to Import LLPAs
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

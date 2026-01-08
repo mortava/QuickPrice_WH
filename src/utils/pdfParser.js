@@ -509,10 +509,132 @@ export function convertToRateSheet(parsedData) {
   };
 }
 
+/**
+ * Parse ONLY LLPA data from a PDF file (for dedicated LLPA import)
+ */
+export async function parseLlpaOnlyFromPdf(file) {
+  try {
+    const text = await extractTextFromPdf(file);
+    const llpaData = parseLlpaFromText(text);
+
+    // Count extracted values
+    let totalValues = 0;
+    let categoryCount = 0;
+    for (const [cat, options] of Object.entries(llpaData)) {
+      categoryCount++;
+      for (const opt of Object.values(options)) {
+        totalValues += Object.keys(opt).length;
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        llpaData,
+        stats: {
+          categories: categoryCount,
+          totalValues,
+        }
+      },
+    };
+  } catch (error) {
+    console.error('LLPA PDF parsing error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to parse LLPA data from PDF',
+    };
+  }
+}
+
+/**
+ * Parse ONLY base rates/pricing from a PDF file (for dedicated rates import)
+ */
+export async function parseBaseRatesOnlyFromPdf(file) {
+  try {
+    const text = await extractTextFromPdf(file);
+
+    const result = {
+      baseRates: [],
+      programName: '',
+      programType: 'NonQM',
+      settings: {},
+    };
+
+    // Extract program name
+    const programPatterns = [
+      /^(NonQM|DSCR|HELOAN|RTL)[\s\/]*([A-Z])?/im,
+      /Program[:\s]*([A-Za-z0-9\s\-\/]+)/i,
+    ];
+
+    for (const pattern of programPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        result.programName = match[0].trim();
+        break;
+      }
+    }
+
+    // Detect program type
+    if (/DSCR/i.test(text)) {
+      result.programType = 'DSCR';
+    } else if (/HELOAN/i.test(text)) {
+      result.programType = 'HELOAN';
+    } else if (/RTL|Bridge|Fix.*Flip/i.test(text)) {
+      result.programType = 'RTL';
+    }
+
+    // Extract base rates - pattern: "5.750 97.625" or "5.750% 97.625"
+    const ratePattern = /(\d{1,2}\.\d{2,3})%?\s+(\d{2,3}\.\d{2,3})/g;
+    const foundRates = new Set();
+
+    let rateMatch;
+    while ((rateMatch = ratePattern.exec(text)) !== null) {
+      const rate = parseFloat(rateMatch[1]);
+      const price = parseFloat(rateMatch[2]);
+
+      if (rate >= 4 && rate <= 15 && price >= 90 && price <= 115) {
+        const key = `${rate.toFixed(3)}-${price.toFixed(3)}`;
+        if (!foundRates.has(key)) {
+          foundRates.add(key);
+          result.baseRates.push({ rate, price });
+        }
+      }
+    }
+
+    result.baseRates.sort((a, b) => a.rate - b.rate);
+
+    // Extract settings
+    const ficoMatch = text.match(/Min(?:imum)?\s*FICO[:\s]*(\d{3})/i);
+    if (ficoMatch) result.settings.minFico = parseInt(ficoMatch[1]);
+
+    const ltvMatch = text.match(/Max(?:imum)?\s*LTV[:\s]*(\d{2,3})%?/i);
+    if (ltvMatch) result.settings.maxLTV = parseInt(ltvMatch[1]);
+
+    const minLoanMatch = text.match(/Min(?:imum)?\s*Loan[:\s]*\$?([\d,]+)/i);
+    if (minLoanMatch) result.settings.minLoanAmount = parseInt(minLoanMatch[1].replace(/,/g, ''));
+
+    const maxLoanMatch = text.match(/Max(?:imum)?\s*Loan[:\s]*\$?([\d,]+)/i);
+    if (maxLoanMatch) result.settings.maxLoanAmount = parseInt(maxLoanMatch[1].replace(/,/g, ''));
+
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    console.error('Base rates PDF parsing error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to parse base rates from PDF',
+    };
+  }
+}
+
 export default {
   extractTextFromPdf,
   parseRateSheetFromText,
   parsePdfRateSheet,
   parseLlpaFromText,
   convertToRateSheet,
+  parseLlpaOnlyFromPdf,
+  parseBaseRatesOnlyFromPdf,
 };
