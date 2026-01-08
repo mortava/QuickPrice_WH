@@ -77,12 +77,21 @@ export default function App({ onAdminClick }) {
     setIsLoading(true);
     setTimeout(() => {
       // Get primary program result
-      const primaryResult = PricingEngine.calculateRates(formData);
+      let primaryResult = PricingEngine.calculateRates(formData);
       // Get all active program results for "More Options"
       const allResults = PricingEngine.calculateAllProgramRates(formData);
+
+      // If primary program failed but other programs are available, use the first available
+      if ((primaryResult.error || !primaryResult.rates || primaryResult.rates.length === 0) && allResults.length > 0) {
+        primaryResult = allResults[0];
+      }
+
+      // Filter out the primary from allPrograms to avoid duplication
+      const otherPrograms = allResults.filter(r => r.programKey !== primaryResult.programKey);
+
       setRateResults({
         primary: primaryResult,
-        allPrograms: allResults
+        allPrograms: otherPrograms
       });
       setIsLoading(false);
     }, 200);

@@ -147,8 +147,8 @@ export function RateResultsDisplay({ results, formData, onClear }) {
 
         {adjustments && adjustments.length > 0 && (
           <div className="px-5 pb-5">
-            <details className="group">
-              <summary className="flex items-center justify-between text-[11px] font-semibold text-[#71717A] uppercase cursor-pointer py-2"><span>LLPA Breakdown</span></summary>
+            <details className="group" open>
+              <summary className="flex items-center justify-between text-[11px] font-semibold text-[#71717A] uppercase cursor-pointer py-2"><span>LLPA Breakdown ({adjustments.length} adjustments)</span></summary>
               <div className="mt-2 p-4 bg-[#FAFAFA] rounded-lg border border-[#E4E4E7]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                   {adjustments.map((adj, idx) => (
