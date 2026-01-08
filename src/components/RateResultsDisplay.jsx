@@ -14,7 +14,7 @@ export function RateResultsDisplay({ results, formData, onClear }) {
 
   const primaryResult = results.primary || results;
   const allPrograms = results.allPrograms || [];
-  const { program, ltv, ltvBucket, llpaTotal, adjustments, rates, error } = primaryResult;
+  const { program, ltv, ltvBucket, llpaTotal, adjustments, rates, bestRate: engineBestRate, error } = primaryResult;
   const otherPrograms = allPrograms.filter(p => p.programKey !== primaryResult.programKey);
 
   const handlePasscodeSubmit = () => {
@@ -28,7 +28,8 @@ export function RateResultsDisplay({ results, formData, onClear }) {
     }
   };
 
-  const parRate = rates && rates.length > 0 ? rates.reduce((prev, curr) => Math.abs(curr.finalPrice - 100) < Math.abs(prev.finalPrice - 100) ? curr : prev, rates[0]) : null;
+  // Use engine's bestRate (rebate cap logic) or fallback to closest to par
+  const parRate = engineBestRate || (rates && rates.length > 0 ? rates.reduce((prev, curr) => Math.abs(curr.finalPrice - 100) < Math.abs(prev.finalPrice - 100) ? curr : prev, rates[0]) : null);
   const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   const handlePrint = () => window.print();
   const handleShare = async () => {

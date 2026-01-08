@@ -75,22 +75,27 @@ export class DefyPricingLogic {
 
   /**
    * 4. STATE LICENSE FILTERING
+   * Per pricing_logic.md: State eligibility based on doc type and occupancy
    */
-  static getAllowedStates(docType) {
-    const allStates = [
+  static getAllowedStates(docType, occupancy = null) {
+    // DSCR states (expanded list)
+    const dscrStates = [
       "AL", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI",
-      "IL", "IN", "IA", "KY", "LA", "ME", "MA", "MS", "MO", "MT",
-      "NE", "NH", "NJ", "NY", "NC", "ND", "OH", "OK", "RI", "SC",
-      "TN", "TX", "VA", "WA", "WV", "WI", "WY"
+      "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MS", "MO",
+      "MT", "NE", "NH", "NJ", "NM", "NY", "OH", "OK", "PA", "RI",
+      "SC", "TN", "TX", "VA", "WA", "WV", "WI", "WY"
     ];
-    const limitedStates = ["CA", "CO", "FL", "GA", "TX", "AL"];
 
-    // IF DocType != DSCR -> Show Limited List
-    if (docType !== 'DSCR') {
-      return limitedStates;
+    // Primary/Second Home and Non-DSCR states (limited list)
+    const limitedStates = ["CA", "CO", "GA", "FL", "TX", "AL", "TN"];
+
+    // IF DocType == DSCR -> Show DSCR state list
+    if (docType === 'DSCR') {
+      return dscrStates;
     }
-    // IF DocType == DSCR -> Show Full List
-    return allStates;
+
+    // All other doc types get limited states
+    return limitedStates;
   }
 
   /**

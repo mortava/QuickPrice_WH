@@ -7,6 +7,37 @@ import { BASE_RATES, PROGRAMS, LLPA_NONQM_C, LLPA_DSCR_C } from '../data/rateShe
 import { loadRateSheets, DEFAULT_MARGIN_HOLDBACK } from '../data/rateSheetStorage';
 import { shouldApplyAdjustment } from './ProgramOverlays';
 
+/**
+ * Global Pricing Constants (per pricing_logic.md)
+ */
+const GLOBAL_MIN_FINAL_PRICE = 99.000;
+const GLOBAL_MAX_FINAL_PRICE = 101.000;
+
+/**
+ * Round price to nearest 0.125 increment (per pricing_logic.md)
+ * Valid increments: .000, .125, .250, .375, .500, .625, .750, .875
+ */
+function roundToEighth(price) {
+  return Math.round(price * 8) / 8;
+}
+
+/**
+ * Clamp price within global boundaries (per pricing_logic.md)
+ */
+function clampPrice(price) {
+  if (price < GLOBAL_MIN_FINAL_PRICE) return GLOBAL_MIN_FINAL_PRICE;
+  if (price > GLOBAL_MAX_FINAL_PRICE) return GLOBAL_MAX_FINAL_PRICE;
+  return price;
+}
+
+/**
+ * Apply final pricing rules: clamp then round to 0.125
+ */
+function applyFinalPricingRules(price) {
+  const clamped = clampPrice(price);
+  return roundToEighth(clamped);
+}
+
 function getActiveRateSheets() {
   try {
     const sheets = loadRateSheets();
@@ -315,18 +346,34 @@ export class PricingEngine {
     }
 
     const baseRates = program.baseRates;
-    const adjustedRates = baseRates.map(({ rate, price }) => ({
-      rate,
-      basePrice: price,
-      llpaTotal: llpaResult.total,
-      finalPrice: parseFloat((price + llpaResult.total + MARGIN_DEDUCTION).toFixed(3))
-    }));
+    const adjustedRates = baseRates.map(({ rate, price }) => {
+      const rawPrice = price + llpaResult.total + MARGIN_DEDUCTION;
+      const finalPrice = applyFinalPricingRules(rawPrice);
+      return {
+        rate,
+        basePrice: price,
+        llpaTotal: llpaResult.total,
+        rawPrice: parseFloat(rawPrice.toFixed(3)),
+        finalPrice
+      };
+    });
 
-    // Find best rate (closest to 100.000)
-    const eligibleRates = adjustedRates.filter(r => r.finalPrice >= 99 && r.finalPrice <= 101);
-    const bestRate = eligibleRates.length > 0 
-      ? eligibleRates.reduce((best, r) => Math.abs(r.finalPrice - 100) < Math.abs(best.finalPrice - 100) ? r : best)
-      : null;
+    // Filter eligible rates (already clamped to 99-101 range)
+    const eligibleRates = adjustedRates.filter(r =>
+      r.finalPrice >= GLOBAL_MIN_FINAL_PRICE && r.finalPrice <= GLOBAL_MAX_FINAL_PRICE
+    );
+
+    // Rebate cap logic: find best rate that hits the price cap
+    // If multiple rates hit same capped price, choose lowest rate (per pricing_logic.md)
+    let bestRate = null;
+    if (eligibleRates.length > 0) {
+      // Sort by final price descending, then by rate ascending for ties
+      const sorted = [...eligibleRates].sort((a, b) => {
+        if (b.finalPrice !== a.finalPrice) return b.finalPrice - a.finalPrice;
+        return a.rate - b.rate; // Lowest rate wins ties
+      });
+      bestRate = sorted[0];
+    }
 
     return {
       program: program.name,
@@ -334,7 +381,7 @@ export class PricingEngine {
       ltv: ltv.toFixed(2),
       ltvBucket,
       llpaTotal: llpaResult.total,
-      adjustments: llpaResult.adjustments,
+      adjustments: llpaResult.adjustments.filter(a => a.value !== 0), // Only non-zero adjustments
       rates: eligibleRates.sort((a, b) => a.rate - b.rate),
       bestRate,
       allRates: adjustedRates
@@ -342,8 +389,13 @@ export class PricingEngine {
   }
 
   // Calculate rates for ALL active programs
+  // DSCR visibility rule: Never show DSCR unless docType = DSCR (per pricing_logic.md)
   static calculateAllProgramRates(input) {
-    const allPrograms = ['NonQM-C', 'NonQM-A', 'DSCR-C', 'DSCR-A'];
+    const isDSCR = input.docType === 'DSCR';
+    // Filter programs based on DSCR visibility rule
+    const allPrograms = isDSCR
+      ? ['DSCR-C', 'DSCR-A']  // Only DSCR programs when docType is DSCR
+      : ['NonQM-C', 'NonQM-A'];  // Only NonQM programs otherwise
     const results = [];
 
     for (const programKey of allPrograms) {
@@ -387,22 +439,32 @@ export class PricingEngine {
     }
 
     const baseRates = program.baseRates;
-    const adjustedRates = baseRates.map(({ rate, price }) => ({
-      rate,
-      basePrice: price,
-      llpaTotal: llpaResult.total,
-      finalPrice: parseFloat((price + llpaResult.total + MARGIN_DEDUCTION).toFixed(3))
-    }));
+    const adjustedRates = baseRates.map(({ rate, price }) => {
+      const rawPrice = price + llpaResult.total + MARGIN_DEDUCTION;
+      const finalPrice = applyFinalPricingRules(rawPrice);
+      return {
+        rate,
+        basePrice: price,
+        llpaTotal: llpaResult.total,
+        rawPrice: parseFloat(rawPrice.toFixed(3)),
+        finalPrice
+      };
+    });
 
-    const sortedRates = [...adjustedRates].sort((a, b) => a.rate - b.rate);
-    const eligibleRates = [];
-    for (const rateObj of sortedRates) {
-      if (rateObj.finalPrice >= 99 && rateObj.finalPrice <= 101) {
-        eligibleRates.push(rateObj);
-        if (rateObj.finalPrice >= 101) break;
-      }
+    // Filter eligible rates within global bounds
+    const eligibleRates = adjustedRates.filter(r =>
+      r.finalPrice >= GLOBAL_MIN_FINAL_PRICE && r.finalPrice <= GLOBAL_MAX_FINAL_PRICE
+    ).sort((a, b) => a.rate - b.rate);
+
+    // Find best rate using rebate cap logic (highest rebate, lowest rate for ties)
+    let bestRate = null;
+    if (eligibleRates.length > 0) {
+      const sorted = [...eligibleRates].sort((a, b) => {
+        if (b.finalPrice !== a.finalPrice) return b.finalPrice - a.finalPrice;
+        return a.rate - b.rate;
+      });
+      bestRate = sorted[0];
     }
-    eligibleRates.sort((a, b) => a.rate - b.rate);
 
     return {
       program: program.name,
@@ -410,8 +472,9 @@ export class PricingEngine {
       ltv: ltv.toFixed(2),
       ltvBucket,
       llpaTotal: llpaResult.total,
-      adjustments: llpaResult.adjustments,
+      adjustments: llpaResult.adjustments.filter(a => a.value !== 0), // Only non-zero
       rates: eligibleRates,
+      bestRate,
       allRates: adjustedRates
     };
   }
