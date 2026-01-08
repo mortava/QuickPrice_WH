@@ -76,8 +76,14 @@ export default function App({ onAdminClick }) {
   const handleGetRates = () => {
     setIsLoading(true);
     setTimeout(() => {
-      const results = PricingEngine.calculateRates(formData);
-      setRateResults(results);
+      // Get primary program result
+      const primaryResult = PricingEngine.calculateRates(formData);
+      // Get all active program results for "More Options"
+      const allResults = PricingEngine.calculateAllProgramRates(formData);
+      setRateResults({
+        primary: primaryResult,
+        allPrograms: allResults
+      });
       setIsLoading(false);
     }, 200);
   };

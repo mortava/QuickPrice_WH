@@ -5,6 +5,7 @@
 
 import { BASE_RATES, PROGRAMS, LLPA_NONQM_C, LLPA_DSCR_C } from '../data/rateSheets';
 import { loadRateSheets, DEFAULT_MARGIN_HOLDBACK } from '../data/rateSheetStorage';
+import { shouldApplyAdjustment } from './ProgramOverlays';
 
 function getActiveRateSheets() {
   try {
@@ -200,13 +201,18 @@ export class PricingEngine {
     const dtiAdj = this.getAdjustment(llpa.dti, dtiKey, ltvBucket);
     if (dtiAdj !== null) { adjustments.push({ name: 'DTI', key: dtiKey, value: dtiAdj }); total += dtiAdj; }
 
-    const prepayKey = this.mapPrepayPeriod(input.prepayPeriod);
-    const prepayAdj = this.getAdjustment(llpa.prepayPeriod, prepayKey, ltvBucket);
-    if (prepayAdj !== null) { adjustments.push({ name: 'Prepay Period', key: prepayKey, value: prepayAdj }); total += prepayAdj; }
+    // Prepay adjustments only apply for Investment occupancy (Program Overlay)
+    if (shouldApplyAdjustment('prepayPeriod', input)) {
+      const prepayKey = this.mapPrepayPeriod(input.prepayPeriod);
+      const prepayAdj = this.getAdjustment(llpa.prepayPeriod, prepayKey, ltvBucket);
+      if (prepayAdj !== null) { adjustments.push({ name: 'Prepay Period', key: prepayKey, value: prepayAdj }); total += prepayAdj; }
+    }
 
-    const feeKey = this.mapPrepayFee(input.prepayFee);
-    const feeAdj = this.getAdjustment(llpa.prepayFee, feeKey, ltvBucket);
-    if (feeAdj !== null) { adjustments.push({ name: 'Prepay Fee', key: feeKey, value: feeAdj }); total += feeAdj; }
+    if (shouldApplyAdjustment('prepayFee', input)) {
+      const feeKey = this.mapPrepayFee(input.prepayFee);
+      const feeAdj = this.getAdjustment(llpa.prepayFee, feeKey, ltvBucket);
+      if (feeAdj !== null) { adjustments.push({ name: 'Prepay Fee', key: feeKey, value: feeAdj }); total += feeAdj; }
+    }
 
     const escrowKey = input.escrowWaiver ? 'Yes' : 'No';
     const escrowAdj = this.getAdjustment(llpa.escrowWaiver, escrowKey, ltvBucket);
@@ -260,13 +266,18 @@ export class PricingEngine {
     const propAdj = this.getAdjustment(llpa.propertyType, propKey, ltvBucket);
     if (propAdj !== null && propAdj !== undefined) { adjustments.push({ name: 'Property Type', key: propKey, value: propAdj }); total += propAdj; }
 
-    const prepayKey = this.mapPrepayPeriod(input.prepayPeriod);
-    const prepayAdj = this.getAdjustment(llpa.prepayPeriod, prepayKey, ltvBucket);
-    if (prepayAdj !== null) { adjustments.push({ name: 'Prepay Period', key: prepayKey, value: prepayAdj }); total += prepayAdj; }
+    // Prepay adjustments only apply for Investment occupancy (Program Overlay)
+    if (shouldApplyAdjustment('prepayPeriod', input)) {
+      const prepayKey = this.mapPrepayPeriod(input.prepayPeriod);
+      const prepayAdj = this.getAdjustment(llpa.prepayPeriod, prepayKey, ltvBucket);
+      if (prepayAdj !== null) { adjustments.push({ name: 'Prepay Period', key: prepayKey, value: prepayAdj }); total += prepayAdj; }
+    }
 
-    const feeKey = this.mapPrepayFee(input.prepayFee);
-    const feeAdj = this.getAdjustment(llpa.prepayFee, feeKey, ltvBucket);
-    if (feeAdj !== null) { adjustments.push({ name: 'Prepay Fee', key: feeKey, value: feeAdj }); total += feeAdj; }
+    if (shouldApplyAdjustment('prepayFee', input)) {
+      const feeKey = this.mapPrepayFee(input.prepayFee);
+      const feeAdj = this.getAdjustment(llpa.prepayFee, feeKey, ltvBucket);
+      if (feeAdj !== null) { adjustments.push({ name: 'Prepay Fee', key: feeKey, value: feeAdj }); total += feeAdj; }
+    }
 
     const escrowKey = input.escrowWaiver ? 'Yes' : 'No';
     const escrowAdj = this.getAdjustment(llpa.escrowWaiver, escrowKey, ltvBucket);
@@ -279,6 +290,77 @@ export class PricingEngine {
     if (stateAdj) { adjustments.push({ name: 'State', key: input.state, value: stateAdj }); total += stateAdj; }
 
     return { total, adjustments, ineligible: null };
+  }
+
+  // Calculate rates for a specific program
+  static calculateRatesForProgram(input, programKey) {
+    const ltv = (input.loanAmount / input.purchasePrice) * 100;
+
+    // Check if program is active
+    if (!isProgramActive(programKey)) {
+      return { error: PROGRAMS[programKey]?.name + ' is currently unavailable', rates: [], programKey };
+    }
+
+    const program = PROGRAMS[programKey];
+    if (!program) return { error: 'Program not found', rates: [], programKey };
+
+    const ltvBucket = this.getLtvBucket(ltv, programKey);
+    if (!ltvBucket) return { error: 'LTV exceeds program maximum', rates: [], programKey };
+
+    const isDSCR = programKey.includes('DSCR');
+    const llpaResult = isDSCR ? this.calculateDscrLlpa(input, ltvBucket) : this.calculateNonQmLlpa(input, ltvBucket);
+
+    if (llpaResult.total === null) {
+      return { error: 'Ineligible: ' + llpaResult.ineligible, rates: [], adjustments: llpaResult.adjustments, programKey };
+    }
+
+    const baseRates = program.baseRates;
+    const adjustedRates = baseRates.map(({ rate, price }) => ({
+      rate,
+      basePrice: price,
+      llpaTotal: llpaResult.total,
+      finalPrice: parseFloat((price + llpaResult.total + MARGIN_DEDUCTION).toFixed(3))
+    }));
+
+    // Find best rate (closest to 100.000)
+    const eligibleRates = adjustedRates.filter(r => r.finalPrice >= 99 && r.finalPrice <= 101);
+    const bestRate = eligibleRates.length > 0 
+      ? eligibleRates.reduce((best, r) => Math.abs(r.finalPrice - 100) < Math.abs(best.finalPrice - 100) ? r : best)
+      : null;
+
+    return {
+      program: program.name,
+      programKey,
+      ltv: ltv.toFixed(2),
+      ltvBucket,
+      llpaTotal: llpaResult.total,
+      adjustments: llpaResult.adjustments,
+      rates: eligibleRates.sort((a, b) => a.rate - b.rate),
+      bestRate,
+      allRates: adjustedRates
+    };
+  }
+
+  // Calculate rates for ALL active programs
+  static calculateAllProgramRates(input) {
+    const allPrograms = ['NonQM-C', 'NonQM-A', 'DSCR-C', 'DSCR-A'];
+    const results = [];
+
+    for (const programKey of allPrograms) {
+      const result = this.calculateRatesForProgram(input, programKey);
+      if (!result.error && result.rates.length > 0) {
+        results.push(result);
+      }
+    }
+
+    // Sort by best rate's distance to 100
+    results.sort((a, b) => {
+      if (!a.bestRate) return 1;
+      if (!b.bestRate) return -1;
+      return Math.abs(a.bestRate.finalPrice - 100) - Math.abs(b.bestRate.finalPrice - 100);
+    });
+
+    return results;
   }
 
   static calculateRates(input) {
