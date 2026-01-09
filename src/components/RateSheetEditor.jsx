@@ -675,10 +675,12 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-[#09090B] mb-1">Import Base Rates from PDF</h3>
-                  <p className="text-sm text-[#71717A] mb-4">
-                    Upload a rate sheet PDF to automatically extract base rates and pricing data using OCR.
-                    Supports most investor rate sheet formats.
+                  <h3 className="text-lg font-semibold text-[#09090B] mb-1">Import Base Rates Only</h3>
+                  <p className="text-sm text-[#71717A] mb-2">
+                    Extract <strong>ONLY base rates and pricing</strong> from a PDF rate sheet.
+                  </p>
+                  <p className="text-xs text-[#F59E0B] bg-[#FEF3C7] px-2 py-1 rounded mb-3 inline-block">
+                    Does NOT import LLPA adjustments - use LLPA Grid tab for that
                   </p>
                   <button
                     onClick={() => ratesImportRef.current?.click()}
@@ -855,10 +857,12 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-[#09090B] mb-1">Import LLPA Grid from PDF</h3>
-                    <p className="text-sm text-[#71717A] mb-4">
-                      Upload an LLPA adjustment PDF to automatically extract all pricing adjustments using OCR.
-                      Supports FICO grids, LTV adjustments, loan amount tiers, and more.
+                    <h3 className="text-lg font-semibold text-[#09090B] mb-1">Import LLPA Adjustments Only</h3>
+                    <p className="text-sm text-[#71717A] mb-2">
+                      Extract <strong>ONLY LLPA adjustments</strong> from a PDF (FICO, LTV, loan amount, etc).
+                    </p>
+                    <p className="text-xs text-[#F59E0B] bg-[#FEF3C7] px-2 py-1 rounded mb-3 inline-block">
+                      Does NOT import base rates - use Base Rates tab for that
                     </p>
                     <button
                       onClick={() => llpaImportRef.current?.click()}
