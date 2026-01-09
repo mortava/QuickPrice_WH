@@ -1,9 +1,11 @@
 /**
  * Rate Sheet Storage Configuration
  * Manages multiple investor rate sheets with base pricing, LLPAs, and margin holdback
+ * Supports both localStorage (admin editing) and Supabase (published rates)
  */
 
 import { LTV_BUCKETS, LLPA_CATEGORIES } from './llpaConfig';
+import { RateSheetAPI } from '../utils/supabase';
 
 // Storage key for localStorage
 export const RATE_SHEET_STORAGE_KEY = 'quickprice_rate_sheets';
@@ -335,6 +337,140 @@ export const generateBlankTemplate = () => {
   };
 };
 
+// ============================================
+// SUPABASE INTEGRATION
+// ============================================
+
+/**
+ * Convert rate sheet to Supabase format (snake_case)
+ */
+const toSupabaseFormat = (sheet) => ({
+  id: sheet.id,
+  name: sheet.name,
+  program_type: sheet.programType,
+  description: sheet.description || '',
+  is_active: sheet.isActive ?? true,
+  is_published: sheet.isPublished ?? false,
+  published_at: sheet.publishedAt || null,
+  created_at: sheet.createdAt || new Date().toISOString(),
+  updated_at: sheet.updatedAt || new Date().toISOString(),
+  margin_holdback: sheet.marginHoldback ?? DEFAULT_MARGIN_HOLDBACK,
+  ltv_buckets: sheet.ltvBuckets || LTV_BUCKETS,
+  base_rates: sheet.baseRates || [],
+  llpa_overrides: sheet.llpaOverrides || {},
+  na_overrides: sheet.naOverrides || {},
+  settings: sheet.settings || {},
+});
+
+/**
+ * Convert Supabase format to rate sheet (camelCase)
+ */
+const fromSupabaseFormat = (record) => ({
+  id: record.id,
+  name: record.name,
+  programType: record.program_type,
+  description: record.description || '',
+  isActive: record.is_active ?? true,
+  isPublished: record.is_published ?? false,
+  publishedAt: record.published_at,
+  createdAt: record.created_at,
+  updatedAt: record.updated_at,
+  marginHoldback: record.margin_holdback ?? DEFAULT_MARGIN_HOLDBACK,
+  ltvBuckets: record.ltv_buckets || LTV_BUCKETS,
+  baseRates: record.base_rates || [],
+  llpaOverrides: record.llpa_overrides || {},
+  naOverrides: record.na_overrides || {},
+  settings: record.settings || {},
+});
+
+/**
+ * Load published rate sheets from Supabase (for regular users)
+ * Falls back to localStorage/defaults if Supabase is unavailable
+ */
+export const loadPublishedRateSheets = async () => {
+  try {
+    const { data, error } = await RateSheetAPI.getPublishedRateSheets();
+
+    if (error) {
+      console.warn('Failed to load from Supabase, using localStorage:', error);
+      return loadRateSheets();
+    }
+
+    if (data && data.length > 0) {
+      return data.map(fromSupabaseFormat);
+    }
+
+    // No published sheets, return defaults
+    return DEFAULT_RATE_SHEETS;
+  } catch (err) {
+    console.error('Error loading published rate sheets:', err);
+    return loadRateSheets();
+  }
+};
+
+/**
+ * Publish rate sheets to Supabase (admin only)
+ * This makes the rates available to all users
+ */
+export const publishRateSheetsToSupabase = async (rateSheets) => {
+  try {
+    const records = rateSheets.map(sheet => toSupabaseFormat({
+      ...sheet,
+      isPublished: true,
+      publishedAt: new Date().toISOString(),
+    }));
+
+    const { data, error } = await RateSheetAPI.publishAllRateSheets(
+      records.map(r => ({
+        ...r,
+        is_published: true,
+        published_at: new Date().toISOString(),
+      }))
+    );
+
+    if (error) {
+      console.error('Failed to publish to Supabase:', error);
+      return { success: false, error: error.message || error };
+    }
+
+    return {
+      success: true,
+      data: data?.map(fromSupabaseFormat),
+      message: `Published ${rateSheets.length} rate sheet(s) successfully!`
+    };
+  } catch (err) {
+    console.error('Error publishing rate sheets:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Save a single rate sheet to Supabase
+ */
+export const saveRateSheetToSupabase = async (rateSheet) => {
+  try {
+    const record = toSupabaseFormat(rateSheet);
+    const { data, error } = await RateSheetAPI.saveRateSheet(record);
+
+    if (error) {
+      console.error('Failed to save to Supabase:', error);
+      return { success: false, error: error.message || error };
+    }
+
+    return { success: true, data: fromSupabaseFormat(data) };
+  } catch (err) {
+    console.error('Error saving rate sheet:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Check Supabase connection status
+ */
+export const checkSupabaseConnection = async () => {
+  return await RateSheetAPI.checkConnection();
+};
+
 export default {
   RATE_SHEET_STORAGE_KEY,
   DEFAULT_MARGIN_HOLDBACK,
@@ -348,4 +484,11 @@ export default {
   saveRateSheets,
   generateExportTemplate,
   generateBlankTemplate,
+  // Supabase functions
+  loadPublishedRateSheets,
+  publishRateSheetsToSupabase,
+  saveRateSheetToSupabase,
+  checkSupabaseConnection,
+  toSupabaseFormat,
+  fromSupabaseFormat,
 };

@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import { RateSheetList } from './RateSheetList';
 import { RateSheetEditor } from './RateSheetEditor';
-import { loadRateSheets, saveRateSheets, DEFAULT_RATE_SHEETS, generateExportTemplate } from '../data/rateSheetStorage';
+import { loadRateSheets, saveRateSheets, DEFAULT_RATE_SHEETS, generateExportTemplate, publishRateSheetsToSupabase, checkSupabaseConnection } from '../data/rateSheetStorage';
 import { LTV_BUCKETS, LLPA_CATEGORIES } from '../data/llpaConfig';
 
 // Local storage key for LLPA data (legacy)
@@ -20,6 +20,8 @@ export function AdminPanel({ onBack, onPushUpdates }) {
   const [selectedSheet, setSelectedSheet] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pushMessage, setPushMessage] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [supabaseConnected, setSupabaseConnected] = useState(null);
 
   // Legacy LLPA state (for backwards compatibility)
   const [activeCategory, setActiveCategory] = useState('ficoScore');
@@ -31,6 +33,16 @@ export function AdminPanel({ onBack, onPushUpdates }) {
   useEffect(() => {
     const sheets = loadRateSheets();
     setRateSheets(sheets.length > 0 ? sheets : DEFAULT_RATE_SHEETS);
+  }, []);
+
+  // Check Supabase connection on mount
+  useEffect(() => {
+    checkSupabaseConnection().then(result => {
+      setSupabaseConnected(result.connected);
+      if (!result.connected) {
+        console.warn('Supabase not connected:', result.error);
+      }
+    });
   }, []);
 
   // Load legacy LLPA data on mount
@@ -92,6 +104,37 @@ export function AdminPanel({ onBack, onPushUpdates }) {
     }
     setPushMessage('Updates pushed to pricing engine!');
     setTimeout(() => setPushMessage(''), 3000);
+  };
+
+  // Handle publish to Supabase cloud
+  const handlePublishToCloud = async () => {
+    if (rateSheets.length === 0) {
+      setPushMessage('No rate sheets to publish');
+      setTimeout(() => setPushMessage(''), 3000);
+      return;
+    }
+
+    setIsPublishing(true);
+    setPushMessage('Publishing to cloud...');
+
+    try {
+      const result = await publishRateSheetsToSupabase(rateSheets);
+
+      if (result.success) {
+        setPushMessage(`Published ${rateSheets.length} rate sheet(s) to cloud!`);
+        // Also push to local app
+        if (onPushUpdates) {
+          onPushUpdates();
+        }
+      } else {
+        setPushMessage(`Publish failed: ${result.error}`);
+      }
+    } catch (err) {
+      setPushMessage(`Error: ${err.message}`);
+    } finally {
+      setIsPublishing(false);
+      setTimeout(() => setPushMessage(''), 5000);
+    }
   };
 
   // Handle file import
@@ -303,19 +346,51 @@ export function AdminPanel({ onBack, onPushUpdates }) {
 
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-[#E4E4E7] space-y-2">
-          {/* Push Updates Button */}
+          {/* Publish to Cloud Button */}
+          <button
+            onClick={handlePublishToCloud}
+            disabled={isPublishing}
+            className="w-full px-3 py-2.5 bg-[#007FFF] hover:bg-[#0066CC] text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isPublishing ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Publishing...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Publish Rates to Cloud
+              </>
+            )}
+          </button>
+
+          {/* Connection Status */}
+          <div className="flex items-center justify-center gap-2 text-xs">
+            <div className={`w-2 h-2 rounded-full ${supabaseConnected === true ? 'bg-[#10B981]' : supabaseConnected === false ? 'bg-[#DC2626]' : 'bg-[#71717A]'}`} />
+            <span className="text-[#71717A]">
+              {supabaseConnected === true ? 'Cloud Connected' : supabaseConnected === false ? 'Cloud Offline' : 'Checking...'}
+            </span>
+          </div>
+
+          {/* Push Updates Button (local only) */}
           <button
             onClick={handlePushUpdates}
-            className="w-full px-3 py-2.5 bg-[#10B981] hover:bg-[#059669] text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full px-3 py-2 bg-[#F4F4F5] hover:bg-[#E4E4E7] text-[#09090B] text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Push Updates to App
+            Refresh Local App
           </button>
 
           {pushMessage && (
-            <p className="text-xs text-center text-[#10B981] font-medium animate-fade-in">{pushMessage}</p>
+            <p className={`text-xs text-center font-medium animate-fade-in ${pushMessage.includes('failed') || pushMessage.includes('Error') ? 'text-[#DC2626]' : 'text-[#10B981]'}`}>{pushMessage}</p>
           )}
 
           <button
