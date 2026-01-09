@@ -287,8 +287,17 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
     setSaveMessage('Parsing LLPA data from PDF...');
     try {
       const result = await parseLlpaOnlyFromPdf(file);
+      console.log('[LLPA Import] Result:', result);
+
       if (result.success) {
         const { llpaData, stats } = result.data;
+
+        if (stats.totalValues === 0) {
+          setSaveMessage('No LLPA data found in PDF. Check console for debug info.');
+          alert('No LLPA adjustments found in the PDF.\n\nPossible reasons:\n- PDF format not recognized\n- Text not extractable (scanned PDF)\n- LLPA labels don\'t match expected format\n\nCheck browser console (F12) for debug info.');
+          e.target.value = '';
+          return;
+        }
 
         // Merge LLPA overrides from PDF with existing
         setSheet(prev => {
@@ -310,12 +319,12 @@ export function RateSheetEditor({ rateSheet, onSave, onBack }) {
         setHasChanges(true);
         setSaveMessage(`LLPA imported! ${stats.totalValues} values across ${stats.categories} categories.`);
       } else {
-        alert(`LLPA import failed: ${result.error}`);
+        alert(`LLPA import failed: ${result.error}\n\nCheck browser console (F12) for debug info.`);
         setSaveMessage('');
       }
     } catch (err) {
       console.error('LLPA import error:', err);
-      alert('Failed to parse LLPA data from PDF.');
+      alert(`Failed to parse LLPA data: ${err.message}\n\nCheck browser console (F12) for debug info.`);
       setSaveMessage('');
     }
     e.target.value = '';

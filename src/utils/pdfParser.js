@@ -27,12 +27,45 @@ export async function extractTextFromPdf(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .filter(item => item.str)
-        .map(item => item.str)
-        .join(' ');
-      fullText += pageText + '\n\n';
+
+      // Sort items by Y position (top to bottom), then X position (left to right)
+      const sortedItems = textContent.items
+        .filter(item => item.str && item.str.trim())
+        .sort((a, b) => {
+          // Group by approximate row (within 5 units = same row)
+          const yDiff = Math.abs(a.transform[5] - b.transform[5]);
+          if (yDiff > 5) {
+            return b.transform[5] - a.transform[5]; // Higher Y = earlier in document
+          }
+          return a.transform[0] - b.transform[0]; // Left to right within row
+        });
+
+      // Group items by row and join with tabs/newlines
+      let currentY = null;
+      let currentLine = [];
+      const lines = [];
+
+      for (const item of sortedItems) {
+        const y = Math.round(item.transform[5] / 5) * 5; // Round to nearest 5
+        if (currentY === null || Math.abs(y - currentY) > 5) {
+          if (currentLine.length > 0) {
+            lines.push(currentLine.join('\t'));
+          }
+          currentLine = [item.str.trim()];
+          currentY = y;
+        } else {
+          currentLine.push(item.str.trim());
+        }
+      }
+      if (currentLine.length > 0) {
+        lines.push(currentLine.join('\t'));
+      }
+
+      fullText += lines.join('\n') + '\n\n';
     }
+
+    console.log('[PDF Extract] Total pages:', pdf.numPages);
+    console.log('[PDF Extract] Total text length:', fullText.length);
 
     return fullText;
   } catch (error) {
@@ -317,13 +350,16 @@ export function parseLlpaFromText(text) {
   const lines = text.split(/\n/);
   for (const line of lines) {
     // Skip short lines
-    if (line.length < 20) continue;
+    if (line.length < 10) continue;
 
-    // Look for patterns like "Label  0.000  0.000  -0.250..."
-    const parts = line.trim().split(/\s{2,}/);
+    // Try tab-separated first, then multi-space
+    let parts = line.trim().split(/\t/);
+    if (parts.length < 3) {
+      parts = line.trim().split(/\s{2,}/);
+    }
     if (parts.length < 3) continue;
 
-    const label = parts[0];
+    const label = parts[0].trim();
     const mapping = matchRowLabel(label);
     if (!mapping) continue;
 
@@ -333,7 +369,7 @@ export function parseLlpaFromText(text) {
     const values = [];
     for (let i = 1; i < parts.length; i++) {
       const val = parseValue(parts[i]);
-      if (val !== undefined) {
+      if (val !== null && val !== undefined) {
         values.push(val);
       }
     }
@@ -347,6 +383,8 @@ export function parseLlpaFromText(text) {
           llpaOverrides[category][option][LTV_BUCKETS[idx]] = val;
         }
       });
+
+      console.log(`[LLPA Parse] Matched: ${label} -> ${category}/${option} with ${values.length} values`);
     }
   }
 
@@ -515,15 +553,52 @@ export function convertToRateSheet(parsedData) {
 export async function parseLlpaOnlyFromPdf(file) {
   try {
     const text = await extractTextFromPdf(file);
+
+    // Debug: log extracted text length
+    console.log('[LLPA Import] Extracted text length:', text.length);
+    console.log('[LLPA Import] First 500 chars:', text.substring(0, 500));
+
     const llpaData = parseLlpaFromText(text);
 
     // Count extracted values
     let totalValues = 0;
     let categoryCount = 0;
+    const categoriesFound = [];
     for (const [cat, options] of Object.entries(llpaData)) {
       categoryCount++;
+      categoriesFound.push(cat);
       for (const opt of Object.values(options)) {
         totalValues += Object.keys(opt).length;
+      }
+    }
+
+    console.log('[LLPA Import] Categories found:', categoriesFound);
+    console.log('[LLPA Import] Total values:', totalValues);
+
+    // If no data found, try alternative parsing
+    if (totalValues === 0) {
+      console.log('[LLPA Import] No data found with standard parsing, trying alternative...');
+      const altData = parseAlternativeLlpaFormat(text);
+      if (Object.keys(altData).length > 0) {
+        let altCount = 0;
+        for (const opt of Object.values(altData)) {
+          for (const vals of Object.values(opt)) {
+            altCount += Object.keys(vals).length;
+          }
+        }
+        if (altCount > 0) {
+          console.log('[LLPA Import] Alternative parsing found', altCount, 'values');
+          return {
+            success: true,
+            data: {
+              llpaData: altData,
+              stats: {
+                categories: Object.keys(altData).length,
+                totalValues: altCount,
+              }
+            },
+          };
+        }
       }
     }
 
@@ -544,6 +619,53 @@ export async function parseLlpaOnlyFromPdf(file) {
       error: error.message || 'Failed to parse LLPA data from PDF',
     };
   }
+}
+
+/**
+ * Alternative LLPA parsing for different PDF formats
+ */
+function parseAlternativeLlpaFormat(text) {
+  const llpaData = {};
+
+  // Split by lines and look for any numeric patterns
+  const lines = text.split(/[\n\r]+/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length < 10) continue;
+
+    // Look for lines with multiple numbers (potential LLPA rows)
+    const numbers = trimmed.match(/-?\d+\.?\d*/g);
+    if (!numbers || numbers.length < 3) continue;
+
+    // Extract the label (text before first number)
+    const firstNumIndex = trimmed.search(/-?\d+\.?\d*/);
+    if (firstNumIndex <= 0) continue;
+
+    const label = trimmed.substring(0, firstNumIndex).trim();
+    if (label.length < 2) continue;
+
+    // Try to match label
+    const mapping = matchRowLabel(label);
+    if (!mapping) continue;
+
+    const { category, option } = mapping;
+
+    // Initialize
+    if (!llpaData[category]) llpaData[category] = {};
+    if (!llpaData[category][option]) llpaData[category][option] = {};
+
+    // Parse numeric values
+    const numericValues = numbers.map(n => parseFloat(n)).filter(n => !isNaN(n) && Math.abs(n) < 10);
+
+    numericValues.forEach((val, idx) => {
+      if (idx < LTV_BUCKETS.length) {
+        llpaData[category][option][LTV_BUCKETS[idx]] = val;
+      }
+    });
+  }
+
+  return llpaData;
 }
 
 /**
